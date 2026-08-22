@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="system" data-font="monospace">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SoloKanban</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ---------- Board picker (shown before a folder is opened) ---------- -->
+  <div id="board-picker" class="board-picker">
+    <div class="board-picker-inner">
+      <h1 class="logo">SoloKanban<span class="logo-dot">.</span></h1>
+      <p class="tagline">A board is a folder. A card is a file. Nothing else.</p>
+
+      <div id="unsupported-notice" class="unsupported-notice hidden">
+        <strong>This browser can't run SoloKanban.</strong>
+        <p>
+          SoloKanban reads and writes your board directly on disk using the File System
+          Access API, which is currently only available in Chromium-based browsers
+          (Chrome, Edge, Brave, Opera). Please reopen this page in one of those.
+        </p>
+      </div>
+
+      <div class="picker-actions">
+        <button id="open-board-btn" class="primary-btn">Open a board folder&hellip;</button>
+        <button id="continue-board-btn" class="secondary-btn hidden"></button>
+      </div>
+
+      <p class="picker-hint">
+        Choosing an empty folder starts a new board there. Choosing a folder that already
+        has a <code>board.json</code> in it opens that board.
+      </p>
+    </div>
+  </div>
+
+  <!-- ---------- Main app (shown once a board is open) ---------- -->
+  <div id="app" class="app hidden">
+    <header class="top-bar">
+      <h1 id="board-title" class="board-title">&nbsp;</h1>
+      <div class="top-bar-controls">
+        <input id="search-input" class="search-input" type="text" placeholder="Search cards&hellip; (f)" />
+        <button id="theme-toggle-btn" class="icon-text-btn" title="Cycle theme">🖥 System</button>
+        <button id="export-board-btn" class="icon-text-btn" title="Backup / export">Backup</button>
+        <button id="shortcuts-btn" class="icon-text-btn" title="Keyboard shortcuts (?)" onclick="document.getElementById('cheat-sheet').classList.toggle('hidden')">?</button>
+      </div>
+    </header>
+
+    <main id="board" class="board"></main>
+  </div>
+
+  <!-- ---------- Card detail modal ---------- -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-container" class="modal-container"></div>
+  </div>
+
+  <!-- ---------- Keyboard shortcuts cheat sheet ---------- -->
+  <div id="cheat-sheet" class="cheat-sheet hidden">
+    <div class="cheat-sheet-inner">
+      <header>
+        <h2>Keyboard shortcuts</h2>
+        <button id="cheat-sheet-close" class="icon-btn" aria-label="Close">&times;</button>
+      </header>
+      <table>
+        <tr><td><kbd>n</kbd> / <kbd>c</kbd></td><td>New card in active list</td></tr>
+        <tr><td><kbd>f</kbd> / <kbd>/</kbd></td><td>Focus search</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Toggle this cheat sheet</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close modal / cancel</td></tr>
+        <tr><td><kbd>j</kbd>/<kbd>k</kbd> or <kbd>&darr;</kbd>/<kbd>&uarr;</kbd></td><td>Move focus within a list</td></tr>
+        <tr><td><kbd>h</kbd>/<kbd>l</kbd> or <kbd>&larr;</kbd>/<kbd>&rarr;</kbd></td><td>Move focus across lists</td></tr>
+        <tr><td><kbd>Space</kbd> / <kbd>Enter</kbd></td><td>Open focused card</td></tr>
+        <tr><td><kbd>e</kbd></td><td>Edit focused card</td></tr>
+        <tr><td><kbd>l</kbd></td><td>Open label picker</td></tr>
+        <tr><td><kbd>d</kbd></td><td>Open due date picker</td></tr>
+        <tr><td><kbd>t</kbd></td><td>Save focused card as template</td></tr>
+        <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>D</kbd></td><td>Duplicate focused card</td></tr>
+        <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete focused card</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
