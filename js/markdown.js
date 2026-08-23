@@ -1,6 +1,7 @@
 /**
  * SoloKanban Markdown Parser & Renderer
  * Lightweight, safe Markdown renderer with section parsing and security escaping.
+ * v8.3.1 — task checkbox rendering, nested list indentation, heading typography
  */
 
 /**

@@ -869,13 +869,18 @@ body {
   margin-bottom: 12px;
 }
 
+.form-group label,
 .form-label {
+  display: block;
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .form-select, .form-input, .form-group input, .form-group select {
+  display: block;
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-md);
