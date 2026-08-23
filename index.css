@@ -1022,3 +1022,31 @@ body {
   text-decoration: line-through;
   opacity: 0.65;
 }
+
+/* Checklist add-item affordance (PRD §16.4) */
+.checklist-add-row {
+  margin: 4px 0 10px 0;
+}
+
+.checklist-new-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  padding: 5px 4px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.checklist-new-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.checklist-new-input:focus {
+  border-bottom-color: var(--accent-indigo);
+  color: var(--text-primary);
+}

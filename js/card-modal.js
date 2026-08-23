@@ -244,6 +244,7 @@ export class CardModal {
         this.scheduleAutoSave();
       });
     } else {
+      // Wire up checkbox toggle behaviour
       modalEl.querySelectorAll('.task-checkbox').forEach(cb => {
         cb.addEventListener('change', () => {
           const taskIdx = parseInt(cb.dataset.taskIndex, 10);
@@ -252,7 +253,7 @@ export class CardModal {
           let currentIdx = 0;
           const bodyLines = (this.card.body || '').split('\n');
           for (let i = 0; i < bodyLines.length; i++) {
-            const m = bodyLines[i].match(/^(\s*[-*]\s*\[)([ xX])(\]\s*.*)$/);
+            const m = bodyLines[i].match(/^(\s*[-*]\s*\[)([ xX?])(\]\s*.*)$/);
             if (m) {
               if (currentIdx === taskIdx) {
                 const newCheck = cb.checked ? 'x' : ' ';
@@ -271,6 +272,53 @@ export class CardModal {
           }
         });
       });
+
+      // Inject "Add item" affordance after each task checklist block (PRD §16.4)
+      const renderedBox = modalEl.querySelector('#modal-body-rendered, .rendered-markdown-box');
+      if (renderedBox) {
+        const taskLists = renderedBox.querySelectorAll('ul');
+        taskLists.forEach(ul => {
+          // Only inject for task lists (containing at least one task-list-item)
+          if (!ul.querySelector('.task-list-item')) return;
+
+          const addRow = document.createElement('div');
+          addRow.className = 'checklist-add-row';
+          addRow.innerHTML = `
+            <input type="text" class="checklist-new-input" placeholder="+ Add an item...">
+          `;
+          ul.after(addRow);
+
+          const input = addRow.querySelector('.checklist-new-input');
+          const addItem = () => {
+            const text = input.value.trim();
+            if (!text) return;
+            const bodyLines = (this.card.body || '').split('\n');
+            // Find the last checklist item in body and insert after it
+            let lastCheckIdx = -1;
+            for (let i = 0; i < bodyLines.length; i++) {
+              if (bodyLines[i].match(/^\s*[-*]\s*\[[ xX?]\]/)) {
+                lastCheckIdx = i;
+              }
+            }
+            const newItem = `- [ ] ${text}`;
+            if (lastCheckIdx >= 0) {
+              bodyLines.splice(lastCheckIdx + 1, 0, newItem);
+            } else {
+              bodyLines.push(newItem);
+            }
+            this.card.body = bodyLines.join('\n');
+            this.scheduleAutoSave();
+            this.renderModalContainer();
+          };
+
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addItem();
+            }
+          });
+        });
+      }
     }
 
     // Label remove buttons
