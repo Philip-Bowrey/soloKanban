@@ -1,0 +1,246 @@
+/**
+ * SoloKanban Workspace Manager
+ * Handles workspace initialization, dual-level board scanning, legacy layout migration, and move reconciliation.
+ */
+
+import { parseCardFile, serializeCardFile } from './yaml.js';
+import { computeContentHash } from './hash.js';
+import {
+  DEFAULT_FEATURE_TYPES,
+  DEFAULT_LABELS,
+  DEFAULT_FIELDS,
+  DEFAULT_PREFERENCES,
+  DEFAULT_WORKSPACE_CONFIG
+} from './defaults.js';
+
+export class WorkspaceManager {
+  constructor(fsAdapter, db) {
+    this.fsAdapter = fsAdapter;
+    this.db = db;
+  }
+
+  /**
+   * Initializes a fresh workspace directory structure.
+   */
+  async initializeWorkspace() {
+    await this.fsAdapter.ensureDirectory('.solokanban');
+    await this.fsAdapter.ensureDirectory('.solokanban/sdk');
+    await this.fsAdapter.ensureDirectory('.solokanban/skills');
+    await this.fsAdapter.ensureDirectory('.solokanban/locks');
+    await this.fsAdapter.ensureDirectory('.solokanban/presence');
+    await this.fsAdapter.ensureDirectory('.solokanban/trash');
+    await this.fsAdapter.ensureDirectory('.solokanban/quarantine');
+    await this.fsAdapter.ensureDirectory('projects');
+    await this.fsAdapter.ensureDirectory('attachments');
+
+    // Create workspace.json if missing
+    if (!(await this.fsAdapter.readFile('workspace.json'))) {
+      await this.fsAdapter.writeFile('workspace.json', JSON.stringify(DEFAULT_WORKSPACE_CONFIG, null, 2));
+    }
+
+    // Create config files if missing
+    if (!(await this.fsAdapter.readFile('.solokanban/fields.json'))) {
+      await this.fsAdapter.writeFile('.solokanban/fields.json', JSON.stringify(DEFAULT_FIELDS, null, 2));
+    }
+    if (!(await this.fsAdapter.readFile('.solokanban/feature-types.json'))) {
+      await this.fsAdapter.writeFile('.solokanban/feature-types.json', JSON.stringify(DEFAULT_FEATURE_TYPES, null, 2));
+    }
+    if (!(await this.fsAdapter.readFile('.solokanban/labels.json'))) {
+      await this.fsAdapter.writeFile('.solokanban/labels.json', JSON.stringify(DEFAULT_LABELS, null, 2));
+    }
+    if (!(await this.fsAdapter.readFile('.solokanban/preferences.json'))) {
+      await this.fsAdapter.writeFile('.solokanban/preferences.json', JSON.stringify(DEFAULT_PREFERENCES, null, 2));
+    }
+  }
+
+  /**
+   * Scans and loads full workspace data into DB.
+   */
+  async scanWorkspace() {
+    this.db.clear();
+
+    // 1. Load config
+    const labelsStr = await this.fsAdapter.readFile('.solokanban/labels.json');
+    if (labelsStr) this.db.labels = JSON.parse(labelsStr);
+
+    const fieldsStr = await this.fsAdapter.readFile('.solokanban/fields.json');
+    if (fieldsStr) this.db.fields = JSON.parse(fieldsStr);
+
+    const featureTypesStr = await this.fsAdapter.readFile('.solokanban/feature-types.json');
+    if (featureTypesStr) this.db.featureTypes = JSON.parse(featureTypesStr);
+
+    // 2. Load workspace config
+    const workspaceConfigStr = await this.fsAdapter.readFile('workspace.json');
+    const workspaceConfig = workspaceConfigStr ? JSON.parse(workspaceConfigStr) : DEFAULT_WORKSPACE_CONFIG;
+
+    // 3. Scan workspace project cards (/projects/*.md)
+    const projectCardFiles = await this.fsAdapter.listFiles('projects');
+    for (const file of projectCardFiles) {
+      if (file.endsWith('.md')) {
+        const filePath = `projects/${file}`;
+        const content = await this.fsAdapter.readFile(filePath);
+        try {
+          const parsed = parseCardFile(content);
+          const cardId = file.replace('.md', '');
+          this.db.cards.set(cardId, {
+            id: cardId,
+            type: 'project',
+            frontmatter: parsed.frontmatter,
+            body: parsed.body,
+            _filePath: filePath,
+            _isTrash: false
+          });
+        } catch (e) {
+          await this.fsAdapter.quarantineCard(filePath);
+        }
+      }
+    }
+
+    // 4. Scan sub-project directories (exclude .solokanban, projects, attachments)
+    const rootDirs = await this.fsAdapter.listDirectories('');
+    for (const dirName of rootDirs) {
+      if (dirName.startsWith('.')) continue; // skip hidden & .solokanban
+      if (dirName === 'projects' || dirName === 'attachments') continue;
+
+      // Check if project.json exists
+      const projConfigStr = await this.fsAdapter.readFile(`${dirName}/project.json`);
+      if (projConfigStr) {
+        let projConfig = JSON.parse(projConfigStr);
+
+        // Migrate legacy layout.json if present
+        projConfig = await this.migrateLegacyLayout(dirName, projConfig);
+
+        this.db.projects.set(dirName, projConfig);
+
+        // Reconcile list assignments & scan feature cards
+        await this.scanAndReconcileProject(dirName, projConfig);
+      }
+    }
+
+    // Rebuild search index (excludes trash)
+    await this.db.rebuildSearchIndex();
+  }
+
+  /**
+   * Migrate legacy layout.json into project.json.layout
+   */
+  async migrateLegacyLayout(projectDir, projConfig) {
+    const legacyLayoutStr = await this.fsAdapter.readFile(`${projectDir}/layout.json`);
+    if (legacyLayoutStr) {
+      try {
+        const legacyLayout = JSON.parse(legacyLayoutStr);
+        if (!projConfig.layout) {
+          projConfig.layout = legacyLayout;
+        } else if (legacyLayout.dividers) {
+          projConfig.layout.dividers = legacyLayout.dividers;
+        }
+        // Write updated project.json
+        await this.fsAdapter.writeFile(`${projectDir}/project.json`, JSON.stringify(projConfig, null, 2));
+        // Remove legacy layout.json
+        await this.fsAdapter.deleteFile(`${projectDir}/layout.json`);
+      } catch (e) {}
+    }
+    return projConfig;
+  }
+
+  /**
+   * Scan feature cards in project and reconcile partial failure list assignment.
+   */
+  async scanAndReconcileProject(projectId, projConfig) {
+    const featureFiles = await this.fsAdapter.listFiles(`${projectId}/features`);
+    const existingCardFiles = new Map();
+
+    for (const file of featureFiles) {
+      if (file.endsWith('.md')) {
+        const cardId = file.replace('.md', '');
+        const filePath = `${projectId}/features/${file}`;
+        const content = await this.fsAdapter.readFile(filePath);
+        try {
+          const parsed = parseCardFile(content);
+          existingCardFiles.set(cardId, { parsed, filePath });
+        } catch (e) {
+          await this.fsAdapter.quarantineCard(filePath);
+        }
+      }
+    }
+
+    // Reconcile list membership per PRD §6.4
+    const lists = projConfig.lists || [];
+    const listIds = lists.map(l => l.id);
+    const featureOrder = projConfig.featureOrder || {};
+
+    const cardToListMap = new Map();
+    const allSeenCardIds = new Set();
+
+    // 1. Process featureOrder in project.json
+    for (const listId of listIds) {
+      const order = featureOrder[listId] || [];
+      const cleanOrder = [];
+
+      for (const cardId of order) {
+        if (!existingCardFiles.has(cardId)) continue; // File missing
+        if (!cardToListMap.has(cardId)) {
+          cardToListMap.set(cardId, listId);
+          cleanOrder.push(cardId);
+        }
+        allSeenCardIds.add(cardId);
+      }
+      featureOrder[listId] = cleanOrder;
+    }
+
+    // 2. Any card file not in featureOrder -> append to backlog (first list)
+    const backlogId = listIds[0] || 'backlog';
+    if (!featureOrder[backlogId]) featureOrder[backlogId] = [];
+
+    for (const [cardId, data] of existingCardFiles.entries()) {
+      if (!allSeenCardIds.has(cardId)) {
+        cardToListMap.set(cardId, backlogId);
+        featureOrder[backlogId].push(cardId);
+      }
+    }
+
+    // Update project.json if reconciled
+    projConfig.featureOrder = featureOrder;
+    await this.fsAdapter.writeFile(`${projectId}/project.json`, JSON.stringify(projConfig, null, 2));
+
+    // 3. Update card file listId if modified
+    for (const [cardId, listId] of cardToListMap.entries()) {
+      const { parsed, filePath } = existingCardFiles.get(cardId);
+      const isDoneList = lists.find(l => l.id === listId)?.done === true;
+
+      let fileNeedsUpdate = false;
+      if (parsed.frontmatter.listId !== listId) {
+        parsed.frontmatter.listId = listId;
+        fileNeedsUpdate = true;
+      }
+
+      if (isDoneList && !parsed.frontmatter.meta?.deliveredAt) {
+        if (!parsed.frontmatter.meta) parsed.frontmatter.meta = {};
+        parsed.frontmatter.meta.deliveredAt = new Date().toISOString();
+        fileNeedsUpdate = true;
+      } else if (!isDoneList && parsed.frontmatter.meta?.deliveredAt) {
+        delete parsed.frontmatter.meta.deliveredAt;
+        fileNeedsUpdate = true;
+      }
+
+      if (fileNeedsUpdate) {
+        parsed.frontmatter.meta = parsed.frontmatter.meta || {};
+        parsed.frontmatter.meta.revision = (parsed.frontmatter.meta.revision || 1) + 1;
+        parsed.frontmatter.meta.updatedAt = new Date().toISOString();
+        parsed.frontmatter.meta.contentHash = await computeContentHash(parsed.frontmatter, parsed.body);
+
+        const newContent = serializeCardFile(parsed.frontmatter, parsed.body);
+        await this.fsAdapter.writeFile(filePath, newContent);
+      }
+
+      this.db.cards.set(cardId, {
+        id: cardId,
+        projectId,
+        frontmatter: parsed.frontmatter,
+        body: parsed.body,
+        _filePath: filePath,
+        _isTrash: false
+      });
+    }
+  }
+}
