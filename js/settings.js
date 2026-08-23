@@ -322,7 +322,7 @@ export class SettingsModal {
           if (typeof confirm === 'undefined' || confirm(`Move project ${projId} to trash?`)) {
             const manager = new WorkspaceManager(this.appState.fsAdapter, this.appState.db);
             await manager.softDeleteProjectFull(projId);
-            this.renderModal();
+            this.close();
             if (this.onChangeCallback) this.onChangeCallback();
           }
         });
@@ -340,6 +340,7 @@ export class SettingsModal {
           await this.appState.preferencesManager.set('card.staleAfterDays', staleDays);
           await this.appState.preferencesManager.set('card.showAgentBadge', showAgentBadge);
           await this.appState.preferencesManager.set('ui.darkMode', darkMode);
+          this.appState.preferencesManager.applyDarkMode();
 
           this.close();
           if (this.onChangeCallback) this.onChangeCallback();

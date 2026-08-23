@@ -33,6 +33,13 @@ export class PreferencesManager {
     return this.preferences;
   }
 
+  /** Applies dark mode class to document body based on current preferences */
+  applyDarkMode() {
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('dark-mode', this.preferences.ui?.darkMode === true);
+    }
+  }
+
   async save() {
     if (!this.fsAdapter) return;
     const content = JSON.stringify(this.preferences, null, 2);

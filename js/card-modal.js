@@ -201,9 +201,24 @@ export class CardModal {
     const modalEl = document.getElementById('card-modal');
     if (!modalEl) return;
 
-    modalEl.querySelector('#modal-close-btn').addEventListener('click', () => this.close());
+    // PRD §16.1: Close via Esc key
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', escHandler);
+        this.close();
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    modalEl.querySelector('#modal-close-btn').addEventListener('click', () => {
+      document.removeEventListener('keydown', escHandler);
+      this.close();
+    });
     modalEl.addEventListener('click', (e) => {
-      if (e.target === modalEl) this.close();
+      if (e.target === modalEl) {
+        document.removeEventListener('keydown', escHandler);
+        this.close();
+      }
     });
 
     const titleInput = modalEl.querySelector('#modal-title-input');

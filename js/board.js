@@ -168,7 +168,7 @@ export class BoardRenderer {
             <div class="column-actions">
               ${wipBadgeHtml}
               <button class="btn-icon btn-add-card-header" data-list-id="${list.id}" title="Add Card">+</button>
-              <button class="btn-icon collapse-list-btn" title="Collapse column">◀</button>
+              <button class="btn-icon collapse-list-btn" data-list-id="${list.id}" title="Collapse column">◀</button>
             </div>
           </div>
           ${statsHtml}

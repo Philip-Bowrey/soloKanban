@@ -302,6 +302,8 @@ export class WorkspaceManager {
     if (!wsConfig.featureOrder[listId]) wsConfig.featureOrder[listId] = [];
     wsConfig.featureOrder[listId].push(cardId);
     await this.fsAdapter.writeFile('workspace.json', JSON.stringify(wsConfig, null, 2));
+    // Keep in-memory workspaceConfig in sync so board ordering reflects the new card
+    this.db.workspaceConfig = wsConfig;
 
     const cardRecord = {
       id: cardId,

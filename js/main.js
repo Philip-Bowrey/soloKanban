@@ -58,6 +58,7 @@ export class SoloKanbanApp {
     this.workspaceManager = new WorkspaceManager(fsAdapter, this.db);
     await this.workspaceManager.initializeWorkspace();
     await this.preferencesManager.load();
+    this.preferencesManager.applyDarkMode();
     await this.workspaceManager.scanWorkspace();
 
     // Run SDK update check
