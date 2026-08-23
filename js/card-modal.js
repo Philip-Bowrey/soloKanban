@@ -318,6 +318,49 @@ export class CardModal {
             }
           });
         });
+
+        // PRD §16.4: Empty checklist sections show "Add an item" affordance
+        const headings = renderedBox.querySelectorAll('h1, h2, h3');
+        headings.forEach(heading => {
+          const headerText = heading.textContent.trim();
+          const isChecklistHeading = /acceptance|criteria|checklist|task|to-do|todo/i.test(headerText);
+          const nextEl = heading.nextElementSibling;
+          const hasListDirectly = nextEl && (nextEl.tagName === 'UL' || nextEl.classList.contains('checklist-add-row'));
+          if (isChecklistHeading && !hasListDirectly) {
+            const addRow = document.createElement('div');
+            addRow.className = 'checklist-add-row';
+            addRow.innerHTML = `
+              <input type="text" class="checklist-new-input" placeholder="+ Add an item...">
+            `;
+            heading.after(addRow);
+
+            const input = addRow.querySelector('.checklist-new-input');
+            input.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (!text) return;
+                const bodyLines = (this.card.body || '').split('\n');
+                let hIdx = -1;
+                for (let i = 0; i < bodyLines.length; i++) {
+                  if (bodyLines[i].replace(/^#+\s*/, '').trim().toLowerCase() === headerText.toLowerCase()) {
+                    hIdx = i;
+                    break;
+                  }
+                }
+                const newItem = `- [ ] ${text}`;
+                if (hIdx >= 0) {
+                  bodyLines.splice(hIdx + 1, 0, newItem);
+                } else {
+                  bodyLines.push(newItem);
+                }
+                this.card.body = bodyLines.join('\n');
+                this.scheduleAutoSave();
+                this.renderModalContainer();
+              }
+            });
+          }
+        });
       }
     }
 
