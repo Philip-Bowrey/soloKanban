@@ -11,6 +11,7 @@
     --primary-dark: #2563eb;
     --danger: #ef4444;
     --success: #10b981;
+    --warning: #f59e0b;
     --shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
@@ -37,12 +38,15 @@ header {
     justify-content: space-between;
     align-items: center;
     box-shadow: var(--shadow);
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .header-left {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .header-right {
@@ -55,6 +59,23 @@ header {
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.8rem;
+}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.breadcrumbs a {
+    color: #93c5fd;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.breadcrumbs a:hover {
+    text-decoration: underline;
 }
 
 button {
@@ -101,11 +122,11 @@ button:disabled {
 .column {
     background: var(--column-bg);
     border-radius: 8px;
-    width: 280px;
-    min-width: 280px;
+    width: 300px;
+    min-width: 300px;
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 120px);
+    max-height: calc(100vh - 160px);
 }
 
 .column-header {
@@ -148,11 +169,87 @@ button:disabled {
     margin-bottom: 4px;
 }
 
-.card-type {
-    font-size: 0.7rem;
+.card-id {
+    font-size: 0.75rem;
     color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.card-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.label-chip {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: white;
+}
+
+.card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.due-date {
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: #f1f5f9;
+}
+
+.due-date.today {
+    background: var(--warning);
+    color: white;
+}
+
+.due-date.overdue {
+    background: var(--danger);
+    color: white;
+}
+
+.priority-high {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.priority-medium {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.priority-low {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 3px;
 }
 
 .empty-state {
@@ -235,6 +332,7 @@ button:disabled {
 
 .form-group input[type="text"],
 .form-group input[type="url"],
+.form-group input[type="date"],
 .form-group select,
 .form-group textarea {
     width: 100%;
