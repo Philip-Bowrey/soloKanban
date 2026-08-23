@@ -8,7 +8,8 @@ let workspaceData = null;   // parsed workspace.json
 let featureTypes = {};      // id -> definition
 let currentProject = null;  // current project object
 let projectHandle = null;   // directory handle for current project
-let currentCard = null;     // card being edited
+let currentCard = null;     // card being edited (null when creating new)
+let newCardMode = false;    // true when the modal is for creating a new card
 
 // ---------- Utility: IndexedDB for storing directory handle ----------
 const dbName = 'solokanban-db';
@@ -55,10 +56,10 @@ async function getSavedWorkspaceHandle() {
 function parseYaml(yamlText) {
     const lines = yamlText.split('\n');
     const root = {};
-    let stack = [{ obj: root, indent: -1, key: null }];
-    let currentIndent = -1;
     let currentObj = root;
     let currentKey = null;
+    let currentIndent = -1;
+    let stack = [];
     let arrayContext = null;
 
     for (let rawLine of lines) {
@@ -66,13 +67,14 @@ function parseYaml(yamlText) {
         if (!line.trim() || line.trim().startsWith('#')) continue;
         const indent = line.search(/\S|$/);
         const trimmed = line.trim();
-        // handle list item "- item"
+
+        // Handle list item "- item"
         if (trimmed.startsWith('- ')) {
             const value = trimmed.slice(2).trim();
             if (arrayContext && indent > arrayContext.indent) {
                 arrayContext.array.push(value);
             } else {
-                // new array under current object/key
+                // New array under current object/key
                 if (currentKey) {
                     const arr = [];
                     currentObj[currentKey] = arr;
@@ -82,24 +84,33 @@ function parseYaml(yamlText) {
             }
             continue;
         }
-        // handle key: value
+
+        // Handle key: value
         const colonIdx = trimmed.indexOf(':');
         if (colonIdx === -1) continue;
         const key = trimmed.slice(0, colonIdx).trim();
         let value = trimmed.slice(colonIdx + 1).trim();
 
-        // nested object or array
+        // If indent is less than current, pop stack
+        while (stack.length > 0 && indent <= currentIndent) {
+            const prev = stack.pop();
+            currentObj = prev.obj;
+            currentKey = prev.key;
+            currentIndent = prev.indent;
+        }
+
+        // Nested object or array
         if (value === '' || value === '{}' || value === '[]') {
-            // move into nested context
             const newObj = {};
             currentObj[key] = newObj;
-            stack.push({ obj: currentObj, indent: currentIndent, key: currentKey });
+            stack.push({ obj: currentObj, key: currentKey, indent: currentIndent });
             currentObj = newObj;
             currentKey = key;
             currentIndent = indent;
             continue;
         }
-        // parse scalar
+
+        // Parse scalar
         let parsedValue = value;
         if (value.startsWith('"') && value.endsWith('"')) {
             parsedValue = value.slice(1, -1);
@@ -139,9 +150,7 @@ function serializeYaml(obj, indent = 0) {
 
 // ---------- Canonical Hash ----------
 async function computeContentHash(frontmatterObj, bodyText) {
-    // 1. Normalize line endings and strip trailing whitespace in body
     const normalizedBody = bodyText.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
-    // 2. Exclude volatile meta fields for hashing
     const fmClone = JSON.parse(JSON.stringify(frontmatterObj));
     if (fmClone.meta) {
         delete fmClone.meta.revision;
@@ -149,11 +158,9 @@ async function computeContentHash(frontmatterObj, bodyText) {
         delete fmClone.meta.updatedAt;
         delete fmClone.meta.updatedBy;
     }
-    // 3. Sort keys recursively
     const sortedFm = sortObject(fmClone);
     const canonicalYaml = serializeYaml(sortedFm, 0);
     const combined = canonicalYaml + '\n---\n' + normalizedBody;
-    // 4. SHA-256
     const encoder = new TextEncoder();
     const data = encoder.encode(combined);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -190,7 +197,7 @@ async function getFileHandle(dirHandle, path, create = false) {
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         if (i === parts.length - 1) {
-            // Always treat the last part as a file (create if requested)
+            // Always treat the last part as a file
             return await current.getFileHandle(part, { create });
         } else {
             // Intermediate parts are directories
@@ -206,6 +213,27 @@ async function ensureDirectory(dirHandle, path) {
         current = await current.getDirectoryHandle(part, { create: true });
     }
     return current;
+}
+
+// ---------- Workspace Initialization ----------
+async function initializeWorkspaceStructure(handle) {
+    // Root files
+    await getFileHandle(handle, 'workspace.json', true); // will be written later
+    // Hidden config directory
+    const solokanbanDir = await ensureDirectory(handle, '.solokanban');
+    await solokanbanDir.getFileHandle('fields.json', { create: true });
+    await solokanbanDir.getFileHandle('feature-types.json', { create: true });
+    await solokanbanDir.getFileHandle('agents.json', { create: true });
+    // Subdirectories inside .solokanban
+    const sdkDir = await ensureDirectory(solokanbanDir, 'sdk');
+    // Create placeholder SDK files
+    await sdkDir.getFileHandle('solokanban.py', { create: true });
+    await sdkDir.getFileHandle('solokanban.js', { create: true });
+    // Presence and quarantine directories
+    await ensureDirectory(solokanbanDir, 'presence');
+    await ensureDirectory(solokanbanDir, 'quarantine');
+    // Attachments
+    await ensureDirectory(handle, 'attachments');
 }
 
 // ---------- Workspace Loading ----------
@@ -228,13 +256,16 @@ async function loadWorkspaceFromHandle(handle) {
     document.getElementById('empty-state').classList.add('hidden');
     document.getElementById('create-card-btn').disabled = false;
 
+    // Initialize the full folder structure if needed
+    await initializeWorkspaceStructure(handle);
+
     // Load workspace.json
     try {
         const wsFileHandle = await getFileHandle(handle, 'workspace.json');
         const wsContent = await readFile(wsFileHandle);
         workspaceData = JSON.parse(wsContent);
     } catch (err) {
-        console.warn('workspace.json not found, creating default.');
+        console.warn('workspace.json not found or invalid, creating default.');
         workspaceData = {
             name: handle.name,
             projects: []
@@ -253,16 +284,14 @@ async function loadWorkspaceFromHandle(handle) {
     } catch (err) {
         console.warn('feature-types.json not found or invalid, using defaults.');
         featureTypes = getDefaultFeatureTypes();
-        // Optionally create the file
-        const dir = await ensureDirectory(handle, '.solokanban');
-        const ftFileHandle = await dir.getFileHandle('feature-types.json', { create: true });
+        const ftDir = await ensureDirectory(handle, '.solokanban');
+        const ftFileHandle = await ftDir.getFileHandle('feature-types.json', { create: true });
         await writeFile(ftFileHandle, JSON.stringify({ types: Object.values(featureTypes) }, null, 2));
     }
 
     // Load projects
     const projects = workspaceData.projects || [];
     if (projects.length === 0) {
-        // If no projects, create a default one
         const defaultProject = { id: 'improvements', name: 'Improvements' };
         workspaceData.projects.push(defaultProject);
         await saveWorkspaceJson();
@@ -283,7 +312,6 @@ async function loadProject(projectId) {
     projectHandle = projectDir;
     currentProject = { id: projectId, name: projectId };
 
-    // Load project.json
     let projectJson = null;
     try {
         const projFileHandle = await projectDir.getFileHandle('project.json');
@@ -374,7 +402,6 @@ async function loadCard(cardId) {
 }
 
 function parseCardMarkdown(cardId, content) {
-    // Split frontmatter and body
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
     let frontmatter = {};
     let body = content;
@@ -433,22 +460,17 @@ async function handleDrop(e) {
 }
 
 async function moveCard(cardId, targetListId) {
-    // Update project.json featureOrder
     const projectData = currentProject.data;
     const featureOrder = projectData.featureOrder;
-    // Remove from all lists
     for (const listId in featureOrder) {
         featureOrder[listId] = featureOrder[listId].filter(id => id !== cardId);
     }
-    // Add to target
     if (!featureOrder[targetListId]) featureOrder[targetListId] = [];
     featureOrder[targetListId].push(cardId);
 
-    // Save project.json
     const projFileHandle = await projectHandle.getFileHandle('project.json', { create: true });
     await writeFile(projFileHandle, JSON.stringify(projectData, null, 2));
 
-    // Update card frontmatter listId and Activity Log
     const featuresDir = await ensureDirectory(projectHandle, 'features');
     const cardFileHandle = await featuresDir.getFileHandle(`${cardId}.md`);
     const content = await readFile(cardFileHandle);
@@ -465,7 +487,6 @@ async function moveCard(cardId, targetListId) {
 }
 
 function appendActivityLog(body, entry) {
-    // Ensure Activity Log is at end
     const lines = body.split('\n');
     let activityIndex = -1;
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -477,7 +498,6 @@ function appendActivityLog(body, entry) {
     if (activityIndex === -1) {
         body = body.trimEnd() + '\n\n## Activity Log\n' + entry + '\n';
     } else {
-        // Insert entry before any trailing empty lines
         const before = lines.slice(0, activityIndex + 1).join('\n');
         const after = lines.slice(activityIndex + 1).join('\n').trimStart();
         body = before + '\n' + entry + (after ? '\n' + after : '') + '\n';
@@ -492,6 +512,7 @@ function serializeCard(frontmatter, body) {
 
 // ---------- Card Modal ----------
 async function openCardModal(cardId) {
+    newCardMode = false;
     const card = await loadCard(cardId);
     if (!card) return;
     currentCard = card;
@@ -588,7 +609,6 @@ function parseSections(body) {
             sections[currentSection] += line + '\n';
         }
     }
-    // Trim trailing newlines from each section
     for (const key in sections) {
         sections[key] = sections[key].replace(/\n$/, '');
     }
@@ -612,14 +632,21 @@ function serializeChecklist(items) {
     return items.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`).join('\n');
 }
 
-// ---------- Save Card ----------
+// ---------- Save Card (single handler) ----------
 document.getElementById('save-card-btn').addEventListener('click', async () => {
+    if (newCardMode) {
+        await handleNewCardSave();
+    } else {
+        await handleEditCardSave();
+    }
+});
+
+async function handleEditCardSave() {
     if (!currentCard) return;
     const frontmatter = { ...currentCard.frontmatter };
     const typeDef = featureTypes[frontmatter.type] || null;
     const bodySections = {};
 
-    // Collect form values
     const formContainer = document.getElementById('card-form');
     // Frontmatter fields
     const inputs = formContainer.querySelectorAll('input[data-field-key], select[data-field-key]');
@@ -660,7 +687,6 @@ document.getElementById('save-card-btn').addEventListener('click', async () => {
             const label = section.label;
             newBody += `## ${label}\n${bodySections[section.id] || ''}\n\n`;
         }
-        // Append existing Activity Log from original body
         const originalSections = parseSections(currentCard.body);
         if (originalSections['Activity Log']) {
             newBody += `## Activity Log\n${originalSections['Activity Log']}\n`;
@@ -673,36 +699,91 @@ document.getElementById('save-card-btn').addEventListener('click', async () => {
     frontmatter.meta = frontmatter.meta || {};
     frontmatter.meta.revision = (frontmatter.meta.revision || 0) + 1;
     frontmatter.meta.updatedAt = new Date().toISOString();
-    delete frontmatter.meta.contentHash; // will be recomputed
+    delete frontmatter.meta.contentHash;
 
-    // Compute hash
     const hash = await computeContentHash(frontmatter, newBody);
     frontmatter.meta.contentHash = hash;
 
-    // Write card file
     const featuresDir = await ensureDirectory(projectHandle, 'features');
     const fileHandle = await featuresDir.getFileHandle(`${currentCard.id}.md`);
     const newContent = serializeCard(frontmatter, newBody);
     await writeFile(fileHandle, newContent);
 
-    // Close modal and refresh board
     document.getElementById('card-modal').classList.add('hidden');
     await renderBoard();
-});
+}
 
-document.getElementById('close-modal-btn').addEventListener('click', () => {
+async function handleNewCardSave() {
+    const typeId = document.getElementById('new-card-type').value;
+    const title = document.getElementById('new-card-title').value.trim();
+    if (!title) {
+        alert('Title is required');
+        return;
+    }
+    const typeDef = featureTypes[typeId];
+    if (!typeDef) {
+        alert('Invalid feature type');
+        return;
+    }
+
+    const cardId = generateCardId(typeId);
+    const frontmatter = {
+        id: cardId,
+        projectId: currentProject.id,
+        listId: 'backlog',
+        type: typeId,
+        title: title,
+        meta: {
+            revision: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        }
+    };
+
+    // Apply default values for frontmatter fields
+    for (const field of typeDef.frontmatterFields || []) {
+        if (field.default !== undefined) frontmatter[field.key] = field.default;
+    }
+
+    // Build body with empty sections and Activity Log
+    let body = '';
+    for (const section of typeDef.bodySections || []) {
+        body += `## ${section.label}\n\n`;
+    }
+    body += `## Activity Log\n- ${new Date().toISOString()} — Card created\n`;
+
+    frontmatter.meta.contentHash = await computeContentHash(frontmatter, body);
+
+    const featuresDir = await ensureDirectory(projectHandle, 'features');
+    const fileHandle = await featuresDir.getFileHandle(`${cardId}.md`, { create: true });
+    await writeFile(fileHandle, serializeCard(frontmatter, body));
+
+    // Update project ordering
+    const projectData = currentProject.data;
+    if (!projectData.featureOrder['backlog']) projectData.featureOrder['backlog'] = [];
+    projectData.featureOrder['backlog'].push(cardId);
+    const projFileHandle = await projectHandle.getFileHandle('project.json', { create: true });
+    await writeFile(projFileHandle, JSON.stringify(projectData, null, 2));
+
     document.getElementById('card-modal').classList.add('hidden');
-});
+    await renderBoard();
+}
 
-// ---------- Create Card ----------
+function generateCardId(typeId) {
+    const prefix = typeId.split('-').map(part => part[0].toUpperCase()).join('').slice(0, 3);
+    const num = String(Date.now()).slice(-4);
+    return `${prefix}-${num}`;
+}
+
+// ---------- Create Card Modal ----------
 document.getElementById('create-card-btn').addEventListener('click', () => {
     if (!workspaceHandle) return;
-    const modal = document.getElementById('card-modal');
+    newCardMode = true;
+    currentCard = null;
     document.getElementById('modal-title').textContent = 'New Card';
     const formContainer = document.getElementById('card-form');
     formContainer.innerHTML = '';
 
-    // Type selector
     const typeGroup = document.createElement('div');
     typeGroup.className = 'form-group';
     typeGroup.innerHTML = `<label>Feature Type</label>`;
@@ -717,7 +798,6 @@ document.getElementById('create-card-btn').addEventListener('click', () => {
     typeGroup.appendChild(typeSelect);
     formContainer.appendChild(typeGroup);
 
-    // Title
     const titleGroup = document.createElement('div');
     titleGroup.className = 'form-group';
     titleGroup.innerHTML = `<label>Title</label>`;
@@ -727,80 +807,13 @@ document.getElementById('create-card-btn').addEventListener('click', () => {
     titleGroup.appendChild(titleInput);
     formContainer.appendChild(titleGroup);
 
-    // Hidden field to mark as new
-    formContainer.dataset.newCard = 'true';
     document.getElementById('conflict-warning').classList.add('hidden');
-    modal.classList.remove('hidden');
+    document.getElementById('card-modal').classList.remove('hidden');
 });
 
-// Override save for new card
-document.getElementById('save-card-btn').addEventListener('click', async (e) => {
-    const formContainer = document.getElementById('card-form');
-    if (formContainer.dataset.newCard === 'true') {
-        e.preventDefault();
-        const typeId = document.getElementById('new-card-type').value;
-        const title = document.getElementById('new-card-title').value.trim();
-        if (!title) {
-            alert('Title is required');
-            return;
-        }
-        // Generate ID
-        const cardId = generateCardId(typeId);
-        const typeDef = featureTypes[typeId];
-        const frontmatter = {
-            id: cardId,
-            projectId: currentProject.id,
-            listId: 'backlog', // default
-            type: typeId,
-            title: title,
-            meta: {
-                revision: 0,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            }
-        };
-        // Add default frontmatter fields from type
-        for (const field of typeDef.frontmatterFields || []) {
-            if (field.default !== undefined) frontmatter[field.key] = field.default;
-        }
-        // Generate body with empty sections and Activity Log
-        let body = '';
-        for (const section of typeDef.bodySections || []) {
-            body += `## ${section.label}\n\n`;
-        }
-        body += `## Activity Log\n- ${new Date().toISOString()} — Card created\n`;
-        frontmatter.meta.contentHash = await computeContentHash(frontmatter, body);
-
-        // Write file
-        const featuresDir = await ensureDirectory(projectHandle, 'features');
-        const fileHandle = await featuresDir.getFileHandle(`${cardId}.md`, { create: true });
-        await writeFile(fileHandle, serializeCard(frontmatter, body));
-
-        // Add to project order
-        const projectData = currentProject.data;
-        if (!projectData.featureOrder['backlog']) projectData.featureOrder['backlog'] = [];
-        projectData.featureOrder['backlog'].push(cardId);
-        const projFileHandle = await projectHandle.getFileHandle('project.json', { create: true });
-        await writeFile(projFileHandle, JSON.stringify(projectData, null, 2));
-
-        // Close modal and refresh
-        document.getElementById('card-modal').classList.add('hidden');
-        await renderBoard();
-    } else {
-        // Let existing save handler run (but we need to avoid double binding)
-        // This is a hack; in production would use a single handler.
-        // We'll just call the original save logic again by dispatching a custom event,
-        // but for simplicity we'll duplicate the save logic here? Better to restructure.
-        // For now, we'll just call the same code block as above (but that would duplicate).
-        // Instead, we'll mark that the original handler should continue.
-    }
+document.getElementById('close-modal-btn').addEventListener('click', () => {
+    document.getElementById('card-modal').classList.add('hidden');
 });
-
-function generateCardId(typeId) {
-    const prefix = typeId.split('-').map(part => part[0].toUpperCase()).join('').slice(0, 3);
-    const num = String(Date.now()).slice(-4);
-    return `${prefix}-${num}`;
-}
 
 // ---------- Default Feature Types ----------
 function getDefaultFeatureTypes() {
