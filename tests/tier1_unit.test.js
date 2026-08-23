@@ -93,6 +93,17 @@ describe('Tier 1 — Unit Tests', () => {
       assert.ok(rendered.includes('Unchecked Task'));
       assert.ok(rendered.includes('Completed Task'));
     });
+
+    it('renders ordered lists with <ol> and unordered lists with <ul>', () => {
+      const md = "1. First item\n2. Second item\n\n- Bullet A\n- Bullet B";
+      const rendered = renderMarkdown(md);
+      assert.ok(rendered.includes('<ol>'), 'Should contain <ol> for ordered items');
+      assert.ok(rendered.includes('<li>First item</li>'));
+      assert.ok(rendered.includes('</ol>'));
+      assert.ok(rendered.includes('<ul>'), 'Should contain <ul> for bullet items');
+      assert.ok(rendered.includes('<li>Bullet A</li>'));
+      assert.ok(rendered.includes('</ul>'));
+    });
   });
 
   describe('(v8.3) Label Deletion Fallback Behavior', () => {

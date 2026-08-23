@@ -13,7 +13,8 @@ import { DragDropHandler } from './dragdrop.js';
 import { CardModal } from './card-modal.js';
 import { SettingsModal } from './settings.js';
 import { SdkUpdater } from './sdk-update.js';
-import { escapeHtml } from './markdown.js';
+import { escapeHtml, appendActivityLog } from './markdown.js';
+import { serializeCardFile } from './yaml.js';
 import { DEFAULT_WORKSPACE_CONFIG, DEFAULT_PROJECT_CONFIG } from './defaults.js';
 import {
   saveWorkspaceHandle,
@@ -301,7 +302,7 @@ export class SoloKanbanApp {
       });
 
       cardEl.addEventListener('click', (e) => {
-        if (e.target.closest('.card-quick-complete-btn')) return;
+        if (e.target.closest('.card-quick-complete-btn') || e.target.closest('.list-view-move-select')) return;
         if (cardEl.classList.contains('dragging')) return;
         const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
         if (dist >= 2) return; // Small drag movement — ignore click
@@ -313,6 +314,35 @@ export class SoloKanbanApp {
         // Per PRD §8.1: Clicking a project card opens its edit modal.
         // Inside the modal is a button to navigate to the project board.
         this.cardModal.open(card);
+      });
+    });
+
+    document.querySelectorAll('.list-view-move-select').forEach(select => {
+      select.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const cardId = select.dataset.cardId;
+        const targetListId = select.value;
+        const card = this.db.cards.get(cardId);
+        if (!card) return;
+
+        const sourceListId = card.frontmatter.listId || 'backlog';
+        card.frontmatter.listId = targetListId;
+
+        const config = this.state.currentView === 'project'
+          ? this.db.projects.get(this.state.currentProjectId)
+          : this.db.workspaceConfig;
+        const targetListObj = (config?.lists || []).find(l => l.id === targetListId);
+        if (targetListObj?.done || targetListId === 'done') {
+          card.frontmatter.meta = card.frontmatter.meta || {};
+          card.frontmatter.meta.deliveredAt = new Date().toISOString();
+        } else if (card.frontmatter.meta?.deliveredAt) {
+          delete card.frontmatter.meta.deliveredAt;
+        }
+
+        card.body = appendActivityLog(card.body, `Moved card from ${sourceListId} to ${targetListId}`);
+        const fileContent = serializeCardFile(card.frontmatter, card.body);
+        await this.fsAdapter?.writeFile(card._filePath, fileContent);
+        this.refreshBoard();
       });
     });
   }

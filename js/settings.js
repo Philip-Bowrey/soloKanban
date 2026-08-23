@@ -122,6 +122,7 @@ export class SettingsModal {
             WIP Limit:
             <input type="number" class="list-wip-input" min="0" value="${l.wipLimit || 0}" placeholder="No limit"/>
           </label>
+          <button class="btn-danger btn-delete-list" data-list-id="${escapeHtml(l.id)}">Delete</button>
         </div>`).join('');
 
       return `
@@ -129,7 +130,10 @@ export class SettingsModal {
           <h4>Lists & WIP Limits</h4>
           <p class="section-desc">Configure column titles and Work-In-Progress (WIP) limits. (0 = no limit)</p>
           <div class="lists-config-container">${rows || '<p>No lists configured.</p>'}</div>
-          <button id="btn-save-lists-config" class="btn-primary">Save Lists & WIP Limits</button>
+          <div class="settings-actions-group">
+            <button id="btn-add-new-list" class="btn-secondary">+ Add List</button>
+            <button id="btn-save-lists-config" class="btn-primary">Save Lists & WIP Limits</button>
+          </div>
         </div>`;
     } else if (this.activeTab === 'projects') {
       const projects = Array.from(this.appState.db.projects.values());
@@ -172,7 +176,10 @@ export class SettingsModal {
               <input type="checkbox" id="pref-agent-badges" ${cardPrefs.showAgentBadge !== false ? 'checked' : ''}/> Show Live Agent Badges
             </label>
           </div>
-          <button id="btn-save-prefs" class="btn-primary">Save Preferences</button>
+          <div class="settings-actions-group">
+            <button id="btn-save-prefs" class="btn-primary">Save Preferences</button>
+            <button id="btn-reset-prefs" class="btn-secondary">Reset to Defaults</button>
+          </div>
         </div>`;
     } else {
       return `<p>Configuration tab view.</p>`;
@@ -235,6 +242,7 @@ export class SettingsModal {
 
       modalEl.querySelectorAll('.btn-delete-label').forEach(btn => {
         btn.addEventListener('click', async () => {
+          if (typeof confirm !== 'undefined' && !confirm('Are you sure you want to delete this label?')) return;
           const lblId = btn.dataset.lblId;
           this.appState.db.labels = this.appState.db.labels.filter(l => l.id !== lblId);
           await this.appState.fsAdapter?.writeFile('.solokanban/labels.json', JSON.stringify(this.appState.db.labels, null, 2));
@@ -282,6 +290,7 @@ export class SettingsModal {
 
       modalEl.querySelectorAll('.btn-delete-field').forEach(btn => {
         btn.addEventListener('click', async () => {
+          if (typeof confirm !== 'undefined' && !confirm('Are you sure you want to delete this custom field?')) return;
           const key = btn.dataset.fieldKey;
           this.appState.db.fields = this.appState.db.fields.filter(f => f.key !== key);
           await this.appState.fsAdapter?.writeFile('.solokanban/fields.json', JSON.stringify(this.appState.db.fields, null, 2));
@@ -335,6 +344,7 @@ export class SettingsModal {
 
       modalEl.querySelectorAll('.btn-delete-type').forEach(btn => {
         btn.addEventListener('click', async () => {
+          if (typeof confirm !== 'undefined' && !confirm('Are you sure you want to delete this feature type?')) return;
           const id = btn.dataset.typeId;
           this.appState.db.featureTypes = this.appState.db.featureTypes.filter(t => t.id !== id);
           await this.appState.fsAdapter?.writeFile('.solokanban/feature-types.json', JSON.stringify(this.appState.db.featureTypes, null, 2));
@@ -342,6 +352,78 @@ export class SettingsModal {
           if (this.onChangeCallback) this.onChangeCallback();
         });
       });
+    } else if (this.activeTab === 'lists') {
+      const addListBtn = modalEl.querySelector('#btn-add-new-list');
+      if (addListBtn) {
+        addListBtn.addEventListener('click', () => {
+          const newId = `list_${Math.random().toString(36).substring(2, 7)}`;
+          if (this.appState.currentView === 'project' && this.appState.currentProjectId) {
+            const proj = this.appState.db.projects.get(this.appState.currentProjectId);
+            if (proj) {
+              if (!proj.lists) proj.lists = [];
+              proj.lists.push({ id: newId, title: 'New List', wipLimit: 0 });
+            }
+          } else {
+            if (!this.appState.db.workspaceConfig.lists) this.appState.db.workspaceConfig.lists = [];
+            this.appState.db.workspaceConfig.lists.push({ id: newId, name: 'New List', wipLimit: 0 });
+          }
+          this.renderModal();
+        });
+      }
+
+      modalEl.querySelectorAll('.btn-delete-list').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (typeof confirm !== 'undefined' && !confirm('Are you sure you want to delete this list?')) return;
+          const listId = btn.dataset.listId;
+          if (this.appState.currentView === 'project' && this.appState.currentProjectId) {
+            const proj = this.appState.db.projects.get(this.appState.currentProjectId);
+            if (proj) proj.lists = (proj.lists || []).filter(l => l.id !== listId);
+          } else if (this.appState.db.workspaceConfig?.lists) {
+            this.appState.db.workspaceConfig.lists = this.appState.db.workspaceConfig.lists.filter(l => l.id !== listId);
+          }
+          this.renderModal();
+        });
+      });
+
+      const saveListsBtn = modalEl.querySelector('#btn-save-lists-config');
+      if (saveListsBtn) {
+        saveListsBtn.addEventListener('click', async () => {
+          const rows = modalEl.querySelectorAll('.settings-list-row');
+          let lists;
+          let configPath;
+          if (this.appState.currentView === 'project' && this.appState.currentProjectId) {
+            const proj = this.appState.db.projects.get(this.appState.currentProjectId);
+            lists = proj?.lists;
+            configPath = `${this.appState.currentProjectId}/project.json`;
+          } else {
+            lists = this.appState.db.workspaceConfig?.lists;
+            configPath = '.solokanban/workspace.json';
+          }
+
+          if (lists) {
+            rows.forEach(row => {
+              const listId = row.dataset.listId;
+              const list = lists.find(l => l.id === listId);
+              if (list) {
+                const newTitle = row.querySelector('.list-name-input').value.trim() || list.title || list.name || list.id;
+                if (list.title !== undefined) list.title = newTitle;
+                if (list.name !== undefined) list.name = newTitle;
+                const wipVal = Number(row.querySelector('.list-wip-input').value);
+                list.wipLimit = wipVal > 0 ? wipVal : undefined;
+              }
+            });
+
+            if (this.appState.currentView === 'project') {
+              const proj = this.appState.db.projects.get(this.appState.currentProjectId);
+              await this.appState.fsAdapter?.writeFile(configPath, JSON.stringify(proj, null, 2));
+            } else {
+              await this.appState.fsAdapter?.writeFile(configPath, JSON.stringify(this.appState.db.workspaceConfig, null, 2));
+            }
+          }
+          this.close();
+          if (this.onChangeCallback) this.onChangeCallback();
+        });
+      }
     } else if (this.activeTab === 'projects') {
       modalEl.querySelectorAll('.btn-soft-delete-proj').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -367,6 +449,21 @@ export class SettingsModal {
           await this.appState.preferencesManager.set('card.staleAfterDays', staleDays);
           await this.appState.preferencesManager.set('card.showAgentBadge', showAgentBadge);
           await this.appState.preferencesManager.set('ui.darkMode', darkMode);
+          this.appState.preferencesManager.applyDarkMode();
+
+          this.close();
+          if (this.onChangeCallback) this.onChangeCallback();
+        });
+      }
+
+      const resetBtn = modalEl.querySelector('#btn-reset-prefs');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+          if (typeof confirm !== 'undefined' && !confirm('Reset all preferences to default values?')) return;
+          await this.appState.preferencesManager.set('board.background', '#0f172a');
+          await this.appState.preferencesManager.set('card.staleAfterDays', 7);
+          await this.appState.preferencesManager.set('card.showAgentBadge', true);
+          await this.appState.preferencesManager.set('ui.darkMode', true);
           this.appState.preferencesManager.applyDarkMode();
 
           this.close();

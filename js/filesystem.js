@@ -84,11 +84,27 @@ export class FileSystemAdapter {
   }
 
   /**
-   * Deletes temporary files (.tmp*) in a directory handle.
-   * @param {FileSystemDirectoryHandle} dirHandle 
+   * Deletes temporary files (.tmp*) in a directory handle or relative path.
+   * @param {FileSystemDirectoryHandle|string} dirHandleOrPath 
    */
-  async cleanupTempFiles(dirHandle = this.rootHandle) {
-    if (!dirHandle) return;
+  async cleanupTempFiles(dirHandleOrPath = this.rootHandle) {
+    if (!dirHandleOrPath) return;
+    let dirHandle = dirHandleOrPath;
+
+    if (typeof dirHandleOrPath === 'string') {
+      if (!this.rootHandle) return;
+      const parts = dirHandleOrPath.split('/').filter(Boolean);
+      let currentDir = this.rootHandle;
+      try {
+        for (const part of parts) {
+          currentDir = await currentDir.getDirectoryHandle(part, { create: false });
+        }
+        dirHandle = currentDir;
+      } catch (e) {
+        return;
+      }
+    }
+
     try {
       for await (const [name, entry] of dirHandle.entries()) {
         if (entry.kind === 'file' && (name.startsWith('.') || name.includes('.tmp'))) {

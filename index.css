@@ -364,6 +364,14 @@ body {
   width: 54px;
   align-items: center;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kanban-column.collapsed:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-indigo);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .column-header-collapsed {
@@ -375,6 +383,7 @@ body {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--text-secondary);
+  cursor: pointer;
 }
 
 .column-header {

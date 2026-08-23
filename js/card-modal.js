@@ -552,27 +552,42 @@ export class CardModal {
     // Quick Actions Bar Buttons (Trello style)
     modalEl.querySelector('#qa-labels-btn')?.addEventListener('click', () => {
       const select = modalEl.querySelector('#add-label-select');
-      if (select) select.focus();
+      if (select) {
+        select.focus();
+        select.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     modalEl.querySelector('#qa-priority-btn')?.addEventListener('click', () => {
       const select = modalEl.querySelector('#modal-priority-select');
-      if (select) select.focus();
+      if (select) {
+        select.focus();
+        select.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     modalEl.querySelector('#qa-dates-btn')?.addEventListener('click', () => {
       const dateInput = modalEl.querySelector('#modal-duedate-input');
-      if (dateInput) dateInput.focus();
+      if (dateInput) {
+        dateInput.focus();
+        dateInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     modalEl.querySelector('#qa-assignee-btn')?.addEventListener('click', () => {
       const assigneeIn = modalEl.querySelector('#modal-assignee-input');
-      if (assigneeIn) assigneeIn.focus();
+      if (assigneeIn) {
+        assigneeIn.focus();
+        assigneeIn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     modalEl.querySelector('#qa-checklist-btn')?.addEventListener('click', () => {
       const checkInput = modalEl.querySelector('.checklist-new-input');
-      if (checkInput) checkInput.focus();
+      if (checkInput) {
+        checkInput.focus();
+        checkInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     // Custom fields change
@@ -707,7 +722,7 @@ export class CardModal {
     let hasConflict = false;
 
     // Canonical ordering from feature type if available
-    const cardType = (this.appState.db.featureTypes || []).find(t => t.id === localCard.type);
+    const cardType = (this.appState?.db?.featureTypes || []).find(t => t.id === localCard.type);
     const definedOrder = cardType?.bodySections?.map(s => s.label.toLowerCase().replace(/[^a-z0-9]/g, '-')) || [];
 
     const allSectionIds = Array.from(new Set([

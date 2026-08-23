@@ -29,22 +29,27 @@ export function renderMarkdown(mdText, sectionDescriptions = {}) {
   if (!mdText || typeof mdText !== 'string') return '';
   const lines = mdText.split('\n');
   const htmlLines = [];
-  let inList = false;
+  let currentListType = null; // 'ul' | 'ol' | null
   let taskIndex = 0;
 
   for (let line of lines) {
     const trimmed = line.trim();
 
-    // Check lists & task checkboxes: e.g. "- [ ] item", "- [x] item", "* [ ] item", "- regular item"
+    // Check lists & task checkboxes: e.g. "- [ ] item", "- [x] item", "* [ ] item", "- regular item", "1. item"
     const listMatch = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
     if (listMatch) {
       const indentSpaces = listMatch[1].length;
       const indentDepth = Math.floor(indentSpaces / 2);
+      const bullet = listMatch[2];
       const rest = listMatch[3];
+      const listType = /^\d+\./.test(bullet) ? 'ol' : 'ul';
 
-      if (!inList) {
-        htmlLines.push('<ul>');
-        inList = true;
+      if (currentListType !== listType) {
+        if (currentListType) {
+          htmlLines.push(`</${currentListType}>`);
+        }
+        htmlLines.push(`<${listType}>`);
+        currentListType = listType;
       }
 
       // Check if this list item is a task checkbox: [ ] or [] or [x] or [X]
@@ -60,9 +65,9 @@ export function renderMarkdown(mdText, sectionDescriptions = {}) {
         htmlLines.push(`<li${indentStyle}>${itemContent}</li>`);
       }
       continue;
-    } else if (inList) {
-      htmlLines.push('</ul>');
-      inList = false;
+    } else if (currentListType) {
+      htmlLines.push(`</${currentListType}>`);
+      currentListType = null;
     }
 
     if (!trimmed) {
@@ -92,8 +97,8 @@ export function renderMarkdown(mdText, sectionDescriptions = {}) {
     }
   }
 
-  if (inList) {
-    htmlLines.push('</ul>');
+  if (currentListType) {
+    htmlLines.push(`</${currentListType}>`);
   }
 
   return htmlLines.join('\n');

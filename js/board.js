@@ -88,6 +88,7 @@ export class BoardRenderer {
         const dueDate = fm.dueDate ? `<span class="list-view-badge date">📅 ${escapeHtml(fm.dueDate)}</span>` : '';
         const points = fm.storyPoints ? `<span class="list-view-badge points">🎯 ${escapeHtml(String(fm.storyPoints))} pts</span>` : '';
         const assignee = fm.assignee ? `<span class="list-view-avatar" title="${escapeHtml(fm.assignee)}">${fm.assignee.substring(0, 2).toUpperCase()}</span>` : '';
+        const listOptions = lists.map(l => `<option value="${l.id}" ${l.id === list.id ? 'selected' : ''}>${escapeHtml(l.name || l.title || l.id)}</option>`).join('');
 
         return `
           <div class="list-view-row" data-card-id="${card.id}">
@@ -102,6 +103,11 @@ export class BoardRenderer {
               ${prio}
               ${dueDate}
               ${points}
+            </div>
+            <div class="list-view-cell move-cell">
+              <select class="list-view-move-select" data-card-id="${card.id}" title="Move list">
+                ${listOptions}
+              </select>
             </div>
             <div class="list-view-cell avatar-cell">
               ${assignee}
