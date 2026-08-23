@@ -279,6 +279,10 @@ export class CardModal {
         if (typeof window !== 'undefined' && window.app) {
           window.app.state.currentView = 'project';
           window.app.state.currentProjectId = projId;
+          try {
+            localStorage.setItem('solokanban_last_view', 'project');
+            localStorage.setItem('solokanban_last_project', projId);
+          } catch (e) {}
           window.app.renderHeader();
           window.app.refreshBoard();
         }

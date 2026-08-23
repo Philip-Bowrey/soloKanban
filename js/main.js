@@ -14,6 +14,11 @@ import { CardModal } from './card-modal.js';
 import { SettingsModal } from './settings.js';
 import { SdkUpdater } from './sdk-update.js';
 import { escapeHtml } from './markdown.js';
+import {
+  saveWorkspaceHandle,
+  getStoredWorkspaceHandle,
+  verifyHandlePermission
+} from './handle-storage.js';
 
 export function isChromiumBrowser() {
   if (typeof window === 'undefined') return true;
@@ -47,9 +52,72 @@ export class SoloKanbanApp {
     this.dragDropHandler = new DragDropHandler(this.state, () => this.refreshBoard());
 
     this.bindHeaderEvents();
+
+    // Restore previously opened workspace from IndexedDB on refresh
+    await this.tryRestorePreviousWorkspace();
   }
 
-  async openWorkspaceHandle(dirHandle) {
+  async tryRestorePreviousWorkspace() {
+    try {
+      const stored = await getStoredWorkspaceHandle();
+      if (!stored || !stored.handle) return;
+
+      const hasPermission = await verifyHandlePermission(stored.handle, false);
+      if (hasPermission) {
+        await this.openWorkspaceHandle(stored.handle, false);
+
+        // Restore active project sub-view if it was open prior to reload
+        const savedView = typeof localStorage !== 'undefined' ? localStorage.getItem('solokanban_last_view') : null;
+        const savedProject = typeof localStorage !== 'undefined' ? localStorage.getItem('solokanban_last_project') : null;
+        if (savedView === 'project' && savedProject && this.db.projects.has(savedProject)) {
+          this.state.currentView = 'project';
+          this.state.currentProjectId = savedProject;
+          this.renderHeader();
+          this.refreshBoard();
+        }
+      } else {
+        // Permission needs user gesture — present 1-click Reopen Workspace prompt
+        const container = document.getElementById('kanban-board-container');
+        if (container && container.querySelector('.empty-workspace-prompt')) {
+          const folderName = stored.name || 'Previous Workspace';
+          container.innerHTML = `
+            <div class="empty-workspace-prompt">
+              <div class="prompt-icon">📁</div>
+              <h2>Welcome Back</h2>
+              <p>You were previously working in <strong>${escapeHtml(folderName)}</strong>.</p>
+              <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px;">
+                <button id="btn-reopen-workspace" class="btn-gradient btn-lg">⚡ Reopen "${escapeHtml(folderName)}"</button>
+                <button onclick="document.getElementById('open-folder-btn').click()" class="btn-secondary btn-lg">Choose Different Folder...</button>
+              </div>
+            </div>`;
+
+          document.getElementById('btn-reopen-workspace')?.addEventListener('click', async () => {
+            const granted = await verifyHandlePermission(stored.handle, true);
+            if (granted) {
+              await this.openWorkspaceHandle(stored.handle);
+              const savedView = typeof localStorage !== 'undefined' ? localStorage.getItem('solokanban_last_view') : null;
+              const savedProject = typeof localStorage !== 'undefined' ? localStorage.getItem('solokanban_last_project') : null;
+              if (savedView === 'project' && savedProject && this.db.projects.has(savedProject)) {
+                this.state.currentView = 'project';
+                this.state.currentProjectId = savedProject;
+                this.renderHeader();
+                this.refreshBoard();
+              }
+            } else {
+              document.getElementById('open-folder-btn')?.click();
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[SoloKanban] Error restoring previous workspace:', e);
+    }
+  }
+
+  async openWorkspaceHandle(dirHandle, saveHandle = true) {
+    if (saveHandle) {
+      await saveWorkspaceHandle(dirHandle);
+    }
     const fsAdapter = new FileSystemAdapter(dirHandle);
     this.state.fsAdapter = fsAdapter;
     this.db.setFsAdapter(fsAdapter);
@@ -116,6 +184,10 @@ export class SoloKanbanApp {
       document.getElementById('nav-back-workspace-btn')?.addEventListener('click', () => {
         this.state.currentView = 'workspace';
         this.state.currentProjectId = null;
+        try {
+          localStorage.setItem('solokanban_last_view', 'workspace');
+          localStorage.removeItem('solokanban_last_project');
+        } catch (e) {}
         this.renderHeader();
         this.refreshBoard();
       });
