@@ -26,7 +26,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://127.0.0.1:8080',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -46,9 +46,9 @@ export default defineConfig({
    * Swap this for 'npm run dev' if you have a dev server.
    */
   webServer: {
-    command: 'npx --yes http-server . -p 8080 --cors -c-1',
-    port: 8080,
+    command: 'node serve.js',
+    url: 'http://127.0.0.1:8080',
     reuseExistingServer: !process.env.CI,
-    timeout: 15_000,
+    timeout: 10_000,
   },
 });

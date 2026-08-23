@@ -6,7 +6,7 @@
  * warning on modal open, stale presence auto-expiry.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 const CARD_ID = 'PROJ_0001-0001';
 const PROJECT_ID = 'PROJ_0001';

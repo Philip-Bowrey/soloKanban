@@ -6,7 +6,7 @@
  * blur-to-render + persist, section heading tooltips.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // Helper: navigate into a project board and create one feature card
 async function createCardOnProjectBoard(page, kanban, title = 'MD Test Card') {

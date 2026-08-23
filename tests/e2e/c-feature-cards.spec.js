@@ -7,7 +7,7 @@
  * archive.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // Helper: open workspace, create a project and navigate into its board
 async function setupProjectBoard(page, kanban, projectTitle = 'Test Project') {

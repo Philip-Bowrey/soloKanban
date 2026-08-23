@@ -6,7 +6,7 @@
  * priority flag, progress ring, badge icons, empty fields not showing.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // Helper: build a seeded card file with specific frontmatter
 function buildCardFile(fields = {}) {

@@ -7,7 +7,7 @@
  * and custom field definition/visibility.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // Helper: open workspace and navigate to settings Labels tab
 async function openLabelsSettings(page, kanban) {

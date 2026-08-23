@@ -10,7 +10,7 @@
  * Additional search tests should be added as the search spec is refined.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // US-SEARCH-1: Searching by text filters the visible cards

@@ -6,7 +6,7 @@
  * breadcrumb navigation, delete to trash with confirmation.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // US-PROJ-1: Create a new project

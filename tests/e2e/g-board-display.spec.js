@@ -6,7 +6,7 @@
  * column stats, board background, and list dividers.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // Helper: open workspace, create a project, navigate to its board
 async function setupProjectBoard(page, kanban, title = 'Board Test') {

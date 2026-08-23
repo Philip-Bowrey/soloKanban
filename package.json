@@ -13,7 +13,7 @@
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:debug": "npx playwright test --debug",
     "test:all": "npm test && npm run test:fuzz && npm run test:python && npm run test:e2e",
-    "serve": "npx http-server . -p 8080 --cors -c-1"
+    "serve": "node serve.js"
   },
   "keywords": [
     "kanban",
@@ -21,6 +21,9 @@
     "agent-native",
     "file-system-access-api"
   ],
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  },
   "author": "",
   "license": "MIT"
 }

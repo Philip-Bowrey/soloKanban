@@ -6,7 +6,7 @@
  * (Chromium vs non-Chromium), per-workspace banner dismissal.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // US-SETUP-1: Opening a blank folder initializes the workspace

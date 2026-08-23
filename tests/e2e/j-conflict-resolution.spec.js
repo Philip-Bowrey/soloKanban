@@ -12,7 +12,7 @@
  * triggering the save path that reads the "disk" version.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 const PROJECT_ID = 'PROJ_0001';
 const CARD_ID = `${PROJECT_ID}-0001`;

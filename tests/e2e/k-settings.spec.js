@@ -6,7 +6,7 @@
  * staleness threshold update, agent badge preference disable.
  */
 
-import { test, expect } from '../fixtures/kanban-fixture.js';
+import { test, expect } from './fixtures/kanban-fixture.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // US-SET-1: Settings panel shows all five tabs
