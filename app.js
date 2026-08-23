@@ -189,13 +189,14 @@ async function getFileHandle(dirHandle, path, create = false) {
     let current = dirHandle;
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        if (i === parts.length - 1 && !create) {
-            return await current.getFileHandle(part);
+        if (i === parts.length - 1) {
+            // Always treat the last part as a file (create if requested)
+            return await current.getFileHandle(part, { create });
         } else {
+            // Intermediate parts are directories
             current = await current.getDirectoryHandle(part, { create });
         }
     }
-    return current;
 }
 
 async function ensureDirectory(dirHandle, path) {
