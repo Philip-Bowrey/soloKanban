@@ -20,12 +20,16 @@
       <nav id="breadcrumb-nav" class="breadcrumb-nav">
         <span class="nav-pill active">Workspace Board</span>
       </nav>
+      <div class="view-switcher-tabs">
+        <button id="view-btn-board" class="view-tab-btn active" title="Switch to Kanban Board View">📋 Board</button>
+        <button id="view-btn-list" class="view-tab-btn" title="Switch to List View">📝 List</button>
+      </div>
     </div>
 
     <div class="header-right">
       <div class="search-bar-container">
         <span class="search-icon">🔍</span>
-        <input type="text" id="global-search-input" placeholder="Filter cards (Title, Body, ID)..." class="search-input">
+        <input type="text" id="global-search-input" placeholder="Filter cards (Title, Body, ID)... ⌘K" class="search-input">
       </div>
 
       <div class="filter-controls">

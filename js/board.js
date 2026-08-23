@@ -7,6 +7,18 @@ import { renderCardFace } from './card-render.js';
 import { escapeHtml } from './markdown.js';
 import { DEFAULT_WORKSPACE_CONFIG, DEFAULT_PROJECT_CONFIG } from './defaults.js';
 
+export function getListEmoji(listName = '', listId = '') {
+  const lower = `${listName} ${listId}`.toLowerCase();
+  if (lower.includes('backlog') || lower.includes('inbox')) return '📥';
+  if (lower.includes('idea') || lower.includes('plan')) return '💡';
+  if (lower.includes('progress') || lower.includes('active') || lower.includes('doing')) return '⚡';
+  if (lower.includes('done') || lower.includes('delivered') || lower.includes('finished')) return '✅';
+  if (lower.includes('review') || lower.includes('qa') || lower.includes('test')) return '🔍';
+  if (lower.includes('discuss')) return '🗣️';
+  if (lower.includes('blocked') || lower.includes('hold')) return '🛑';
+  return '📋';
+}
+
 export class BoardRenderer {
   constructor(appState) {
     this.appState = appState;
@@ -52,11 +64,66 @@ export class BoardRenderer {
       container.style.backgroundColor = prefs.background || '#0f172a';
     }
 
-    if (swimlaneBy) {
+    if (this.appState.viewMode === 'list') {
+      container.innerHTML = this.renderListView(config, cardsToRender);
+    } else if (swimlaneBy) {
       container.innerHTML = this.renderSwimlaneView(config, cardsToRender, swimlaneBy, collapsedLists);
     } else {
       container.innerHTML = this.renderStandardView(config, cardsToRender, collapsedLists);
     }
+  }
+
+  renderListView(config, cards) {
+    const lists = config.lists || [];
+    const htmlSections = [];
+
+    for (const list of lists) {
+      const listCards = this.getCardsForList(list.id, cards, config);
+      const emoji = getListEmoji(list.name, list.id);
+      
+      const rowsHtml = listCards.map(card => {
+        const fm = card.frontmatter || {};
+        const isDone = (fm.listId === 'done' || list.done);
+        const prio = fm.priority ? `<span class="list-view-badge prio-${fm.priority.toLowerCase()}">${escapeHtml(fm.priority)}</span>` : '';
+        const dueDate = fm.dueDate ? `<span class="list-view-badge date">📅 ${escapeHtml(fm.dueDate)}</span>` : '';
+        const points = fm.storyPoints ? `<span class="list-view-badge points">🎯 ${escapeHtml(String(fm.storyPoints))} pts</span>` : '';
+        const assignee = fm.assignee ? `<span class="list-view-avatar" title="${escapeHtml(fm.assignee)}">${fm.assignee.substring(0, 2).toUpperCase()}</span>` : '';
+
+        return `
+          <div class="list-view-row" data-card-id="${card.id}">
+            <div class="list-view-cell select-cell">
+              <button class="card-quick-complete-btn ${isDone ? 'is-done' : ''}" data-card-id="${card.id}">${isDone ? '✓' : '○'}</button>
+            </div>
+            <div class="list-view-cell title-cell">
+              <span class="list-view-card-title">${escapeHtml(fm.title || card.id)}</span>
+              <span class="list-view-card-id">${escapeHtml(card.id)}</span>
+            </div>
+            <div class="list-view-cell badges-cell">
+              ${prio}
+              ${dueDate}
+              ${points}
+            </div>
+            <div class="list-view-cell avatar-cell">
+              ${assignee}
+            </div>
+          </div>`;
+      }).join('');
+
+      htmlSections.push(`
+        <div class="list-view-section" data-list-id="${list.id}">
+          <div class="list-view-section-header">
+            <span class="section-emoji">${emoji}</span>
+            <h3 class="section-title">${escapeHtml(list.name)}</h3>
+            <span class="card-count-pill">${listCards.length}</span>
+            <button class="btn-add-card-header btn-icon" data-list-id="${list.id}" title="Add Card">+</button>
+          </div>
+          <div class="list-view-table">
+            ${rowsHtml || `<div class="empty-list-view-row btn-add-card-footer" data-list-id="${list.id}">+ Add a card to ${escapeHtml(list.name)}</div>`}
+          </div>
+        </div>`);
+    }
+
+    return `<div class="kanban-list-view-container">${htmlSections.join('')}</div>`;
   }
 
   applyFilters(cards) {
@@ -159,7 +226,11 @@ export class BoardRenderer {
       <div class="kanban-column" data-list-id="${list.id}">
         <div class="column-header">
           <div class="column-title-bar">
-            <h3 class="column-title">${escapeHtml(list.name)}</h3>
+            <div class="column-title-left">
+              <span class="column-emoji">${getListEmoji(list.name, list.id)}</span>
+              <h3 class="column-title">${escapeHtml(list.name)}</h3>
+              <span class="card-count-pill">${listCards.length}</span>
+            </div>
             <div class="column-actions">
               ${wipBadgeHtml}
               <button class="btn-icon btn-add-card-header" data-list-id="${list.id}" title="Add Card">+</button>

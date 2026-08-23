@@ -13,7 +13,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:8080';
+const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:8088';
 const isRemote = BASE_URL.startsWith('https://') || (BASE_URL.startsWith('http://') && !BASE_URL.includes('127.0.0.1') && !BASE_URL.includes('localhost'));
 
 export default defineConfig({
@@ -47,9 +47,12 @@ export default defineConfig({
   ...(isRemote ? {} : {
     webServer: {
       command: 'node serve.js',
-      url: 'http://127.0.0.1:8080',
+      url: 'http://127.0.0.1:8088',
+      env: {
+        PORT: '8088'
+      },
       reuseExistingServer: !process.env.CI,
-      timeout: 10_000,
+      timeout: 15_000,
     },
   }),
 });

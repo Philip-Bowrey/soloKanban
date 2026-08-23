@@ -1050,3 +1050,320 @@ body {
   border-bottom-color: var(--accent-indigo);
   color: var(--text-primary);
 }
+
+/* Header View Switcher Tabs (Asana-inspired) */
+.view-switcher-tabs {
+  display: flex;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.view-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Quick Actions Toolbar (Trello-inspired) */
+.modal-quick-actions-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 24px;
+  background: rgba(15, 23, 42, 0.3);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.quick-action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.quick-action-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent-indigo);
+  color: #fff;
+}
+
+/* Linear Checklist Progress Bar (Trello-inspired) */
+.modal-checklist-progress-container {
+  margin-bottom: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-checklist-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.modal-checklist-pct-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-indigo);
+}
+
+.modal-checklist-count-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.modal-checklist-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.modal-checklist-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-cyan));
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Property Grid (Asana-inspired) */
+.property-grid-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.property-row {
+  margin-bottom: 0 !important;
+}
+
+.property-row .form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  margin-bottom: 2px;
+}
+
+.prop-icon {
+  font-size: 0.85rem;
+}
+
+/* Card Quick Complete Circle & Badges */
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-quick-complete-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-muted);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.card-quick-complete-btn:hover {
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.card-quick-complete-btn.is-done {
+  background: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+  color: #fff;
+  font-weight: 700;
+}
+
+.card-face-done .card-title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.card-summary-icon {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Column Header Emoji & Title Left */
+.column-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.column-emoji {
+  font-size: 1rem;
+}
+
+/* Asana-style List View */
+.kanban-list-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.list-view-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.list-view-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: rgba(15, 23, 42, 0.7);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.list-view-section-header .section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.list-view-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-view-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  gap: 12px;
+}
+
+.list-view-row:last-child {
+  border-bottom: none;
+}
+
+.list-view-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.list-view-cell.select-cell {
+  width: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.list-view-cell.title-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.list-view-card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.list-view-card-id {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.list-view-cell.badges-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-view-badge {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.list-view-badge.prio-critical { background: rgba(244, 63, 94, 0.2); color: #fca5a5; }
+.list-view-badge.prio-high { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
+.list-view-badge.prio-medium { background: rgba(99, 102, 241, 0.2); color: #c7d2fe; }
+.list-view-badge.prio-low { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; }
+
+.list-view-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-indigo);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-list-view-row {
+  padding: 14px 18px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.15s ease;
+}
+
+.empty-list-view-row:hover {
+  color: var(--accent-indigo);
+}
+

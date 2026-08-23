@@ -139,12 +139,28 @@ export function renderCardFace(card, context = {}) {
     avatarHtml = `<span class="card-avatar" title="Assigned to ${escapeHtml(owner)}">${initials}</span>`;
   }
 
+  // Description presence badge (Trello ≡ icon)
+  const bodyWithoutHeaders = (card.body || '').replace(/^#+.*$/gm, '').trim();
+  const hasDescription = bodyWithoutHeaders.length > 0;
+  const descBadgeHtml = hasDescription ? `<span class="card-summary-icon" title="Has description">≡</span>` : '';
+
+  // Attachments badge
+  const attachmentCount = Array.isArray(fm.attachments) ? fm.attachments.length : 0;
+  const attachBadgeHtml = attachmentCount > 0 ? `<span class="card-summary-icon" title="${attachmentCount} attachment(s)">📎 ${attachmentCount}</span>` : '';
+
+  // Quick complete circle (Asana-style)
+  const isDone = card.frontmatter?.listId === 'done';
+  const checkCircleHtml = `<button class="card-quick-complete-btn ${isDone ? 'is-done' : ''}" data-card-id="${card.id}" title="${isDone ? 'Move back to Backlog' : 'Mark as Done'}">${isDone ? '✓' : '○'}</button>`;
+
   return `
-    <div class="card-face" data-card-id="${card.id}">
+    <div class="card-face ${isDone ? 'card-face-done' : ''}" data-card-id="${card.id}">
       ${coverHtml}
       <div class="card-header-bar">
-        <span class="card-type-tag" style="background-color: ${cardType.color};">${escapeHtml(cardType.name)}</span>
-        <span class="card-id-tag">${escapeHtml(card.id)}</span>
+        <div class="card-header-left">
+          ${checkCircleHtml}
+          <span class="card-type-tag" style="background-color: ${cardType.color};">${escapeHtml(cardType.name)}</span>
+          <span class="card-id-tag">${escapeHtml(card.id)}</span>
+        </div>
         ${agentBadgeHtml}
       </div>
 
@@ -160,6 +176,8 @@ export function renderCardFace(card, context = {}) {
           ${dateBadgeHtml}
           ${storyPointsHtml}
           ${subtaskBadgeHtml}
+          ${descBadgeHtml}
+          ${attachBadgeHtml}
         </div>
         <div class="card-footer-right">
           ${progressRingHtml}

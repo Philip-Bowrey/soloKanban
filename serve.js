@@ -69,6 +69,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`SoloKanban server running at http://localhost:${PORT}/`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`SoloKanban server running at http://127.0.0.1:${PORT}/`);
 });

@@ -6,6 +6,7 @@
 import { parseCardFile, serializeCardFile } from './yaml.js';
 import { computeContentHash } from './hash.js';
 import { parseBodySections, appendActivityLog, renderMarkdown, escapeHtml } from './markdown.js';
+import { parseChecklist, calculateProgress } from './checklist.js';
 
 export class CardModal {
   constructor(appState, onSaveCallback) {
@@ -82,6 +83,31 @@ export class CardModal {
          </div>`
       : '';
 
+    // Quick Actions Bar (Trello-inspired)
+    const quickActionsHtml = `
+      <div class="modal-quick-actions-bar">
+        <button type="button" class="quick-action-btn" id="qa-labels-btn">🏷️ Labels</button>
+        <button type="button" class="quick-action-btn" id="qa-priority-btn">⚡ Priority</button>
+        <button type="button" class="quick-action-btn" id="qa-dates-btn">📅 Due Date</button>
+        <button type="button" class="quick-action-btn" id="qa-assignee-btn">👤 Assignee</button>
+        <button type="button" class="quick-action-btn" id="qa-checklist-btn">☑️ Checklist</button>
+      </div>`;
+
+    // Linear Checklist Progress Bar (Trello / Asana style)
+    const checklistItems = parseChecklist(this.card.body || '');
+    const progress = calculateProgress(checklistItems);
+    const progressBarHtml = (!this.isRawMarkdown && progress.total > 0)
+      ? `<div class="modal-checklist-progress-container">
+           <div class="modal-checklist-progress-info">
+             <span class="modal-checklist-pct-badge">${progress.percentage}% completed</span>
+             <span class="modal-checklist-count-text">${progress.completed} of ${progress.total} tasks</span>
+           </div>
+           <div class="modal-checklist-progress-track">
+             <div class="modal-checklist-progress-fill" style="width: ${progress.percentage}%;"></div>
+           </div>
+         </div>`
+      : '';
+
     // Label Editor with v8.3 Label Deletion Fallback
     const cardLabels = fm.labels || [];
     const labelItemsHtml = cardLabels.map(lblId => {
@@ -109,13 +135,13 @@ export class CardModal {
           return `<option value="${optVal}" ${val === optVal ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
         }).join('');
         return `
-          <div class="form-group">
+          <div class="form-group property-row">
             <label class="form-label">${escapeHtml(field.label)}</label>
             <select class="form-select custom-field-input" data-field-key="${field.key}">${optionsHtml}</select>
           </div>`;
       } else {
         return `
-          <div class="form-group">
+          <div class="form-group property-row">
             <label class="form-label">${escapeHtml(field.label)}</label>
             <input type="text" class="form-input custom-field-input" data-field-key="${field.key}" value="${escapeHtml(String(val))}"/>
           </div>`;
@@ -136,7 +162,7 @@ export class CardModal {
     // Body Editor (Raw vs Rendered)
     const bodyHtml = this.isRawMarkdown
       ? `<textarea id="modal-body-editor" class="modal-textarea">${escapeHtml(this.card.body || '')}</textarea>`
-      : `<div id="modal-body-rendered" class="rendered-markdown-box">${renderMarkdown(this.card.body || '', sectionDescriptions)}</div>`;
+      : `${progressBarHtml}<div id="modal-body-rendered" class="rendered-markdown-box">${renderMarkdown(this.card.body || '', sectionDescriptions)}</div>`;
 
     return `
       <div id="card-modal" class="modal-overlay">
@@ -149,6 +175,8 @@ export class CardModal {
             </div>
             <button id="modal-close-btn" class="modal-close-btn">&times;</button>
           </div>
+
+          ${quickActionsHtml}
 
           <div class="modal-body-layout">
             <div class="modal-main-column">
@@ -166,6 +194,35 @@ export class CardModal {
                   <button id="modal-open-project-board-btn" class="btn-gradient btn-block">🚀 Open Project Board</button>
                 </div>` : ''}
 
+              <div class="sidebar-section property-grid-section">
+                <h4>Properties</h4>
+                
+                <div class="form-group property-row">
+                  <label class="form-label"><span class="prop-icon">👤</span> Assignee</label>
+                  <input type="text" id="modal-assignee-input" class="form-input" placeholder="No assignee" value="${escapeHtml(fm.assignee || '')}"/>
+                </div>
+
+                <div class="form-group property-row">
+                  <label class="form-label"><span class="prop-icon">📅</span> Due Date</label>
+                  <input type="date" id="modal-duedate-input" class="form-input" value="${escapeHtml(fm.dueDate || '')}"/>
+                </div>
+
+                <div class="form-group property-row">
+                  <label class="form-label"><span class="prop-icon">⚡</span> Priority</label>
+                  <select id="modal-priority-select" class="form-select">
+                    <option value="low" ${fm.priority === 'low' ? 'selected' : ''}>Low</option>
+                    <option value="medium" ${fm.priority === 'medium' || !fm.priority ? 'selected' : ''}>Medium</option>
+                    <option value="high" ${fm.priority === 'high' ? 'selected' : ''}>High</option>
+                    <option value="critical" ${fm.priority === 'critical' ? 'selected' : ''}>Critical</option>
+                  </select>
+                </div>
+
+                <div class="form-group property-row">
+                  <label class="form-label"><span class="prop-icon">🎯</span> Story Points</label>
+                  <input type="number" id="modal-storypoints-input" class="form-input" placeholder="e.g. 3" value="${escapeHtml(fm.storyPoints !== undefined ? String(fm.storyPoints) : '')}"/>
+                </div>
+              </div>
+
               <div class="sidebar-section">
                 <h4>Labels</h4>
                 <div class="modal-labels-list">${labelItemsHtml}</div>
@@ -174,16 +231,6 @@ export class CardModal {
                     <option value="">+ Add label...</option>
                     ${availableLabelsSelect}
                   </select>` : ''}
-              </div>
-
-              <div class="sidebar-section">
-                <h4>Priority</h4>
-                <select id="modal-priority-select" class="form-select">
-                  <option value="low" ${fm.priority === 'low' ? 'selected' : ''}>Low</option>
-                  <option value="medium" ${fm.priority === 'medium' ? 'selected' : ''}>Medium</option>
-                  <option value="high" ${fm.priority === 'high' ? 'selected' : ''}>High</option>
-                  <option value="critical" ${fm.priority === 'critical' ? 'selected' : ''}>Critical</option>
-                </select>
               </div>
 
               <div class="sidebar-section">
@@ -407,6 +454,69 @@ export class CardModal {
         }
       });
     }
+
+    // Priority select change
+    const prioSelect = modalEl.querySelector('#modal-priority-select');
+    if (prioSelect) {
+      prioSelect.addEventListener('change', () => {
+        this.card.frontmatter.priority = prioSelect.value;
+        this.scheduleAutoSave();
+      });
+    }
+
+    // Assignee input change
+    const assigneeInput = modalEl.querySelector('#modal-assignee-input');
+    if (assigneeInput) {
+      assigneeInput.addEventListener('input', () => {
+        this.card.frontmatter.assignee = assigneeInput.value.trim() || undefined;
+        this.scheduleAutoSave();
+      });
+    }
+
+    // Due Date input change
+    const dueDateInput = modalEl.querySelector('#modal-duedate-input');
+    if (dueDateInput) {
+      dueDateInput.addEventListener('change', () => {
+        this.card.frontmatter.dueDate = dueDateInput.value || undefined;
+        this.scheduleAutoSave();
+      });
+    }
+
+    // Story Points input change
+    const storyPointsInput = modalEl.querySelector('#modal-storypoints-input');
+    if (storyPointsInput) {
+      storyPointsInput.addEventListener('input', () => {
+        const val = storyPointsInput.value.trim();
+        this.card.frontmatter.storyPoints = val ? Number(val) : undefined;
+        this.scheduleAutoSave();
+      });
+    }
+
+    // Quick Actions Bar Buttons (Trello style)
+    modalEl.querySelector('#qa-labels-btn')?.addEventListener('click', () => {
+      const select = modalEl.querySelector('#add-label-select');
+      if (select) select.focus();
+    });
+
+    modalEl.querySelector('#qa-priority-btn')?.addEventListener('click', () => {
+      const select = modalEl.querySelector('#modal-priority-select');
+      if (select) select.focus();
+    });
+
+    modalEl.querySelector('#qa-dates-btn')?.addEventListener('click', () => {
+      const dateInput = modalEl.querySelector('#modal-duedate-input');
+      if (dateInput) dateInput.focus();
+    });
+
+    modalEl.querySelector('#qa-assignee-btn')?.addEventListener('click', () => {
+      const assigneeIn = modalEl.querySelector('#modal-assignee-input');
+      if (assigneeIn) assigneeIn.focus();
+    });
+
+    modalEl.querySelector('#qa-checklist-btn')?.addEventListener('click', () => {
+      const checkInput = modalEl.querySelector('.checklist-new-input');
+      if (checkInput) checkInput.focus();
+    });
 
     // Custom fields change
     modalEl.querySelectorAll('.custom-field-input').forEach(input => {

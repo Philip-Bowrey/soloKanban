@@ -14,6 +14,7 @@ import { CardModal } from './card-modal.js';
 import { SettingsModal } from './settings.js';
 import { SdkUpdater } from './sdk-update.js';
 import { escapeHtml } from './markdown.js';
+import { DEFAULT_WORKSPACE_CONFIG, DEFAULT_PROJECT_CONFIG } from './defaults.js';
 import {
   saveWorkspaceHandle,
   getStoredWorkspaceHandle,
@@ -225,8 +226,32 @@ export class SoloKanbanApp {
     this.boardRenderer.renderBoard(boardContainer);
     this.dragDropHandler.attachListeners(boardContainer);
     this.bindCardClickListeners();
+    this.bindQuickCompleteListeners();
     this.bindAddCardButtons();
     this.bindColumnCollapseListeners();
+  }
+
+  bindQuickCompleteListeners() {
+    document.querySelectorAll('.card-quick-complete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const cardId = btn.dataset.cardId;
+        const card = this.db.cards.get(cardId);
+        if (!card) return;
+
+        const config = this.state.currentView === 'workspace'
+          ? (this.db.workspaceConfig || DEFAULT_WORKSPACE_CONFIG)
+          : (this.db.projects.get(this.state.currentProjectId) || DEFAULT_PROJECT_CONFIG);
+
+        const doneList = (config.lists || []).find(l => l.done) || { id: 'done' };
+        const isCurrentlyDone = card.frontmatter?.listId === doneList.id;
+        const targetListId = isCurrentlyDone ? 'backlog' : doneList.id;
+
+        await this.workspaceManager.moveCard(cardId, targetListId);
+        this.refreshBoard();
+      });
+    });
   }
 
   bindColumnCollapseListeners() {
@@ -266,7 +291,7 @@ export class SoloKanbanApp {
   }
 
   bindCardClickListeners() {
-    document.querySelectorAll('.kanban-card-wrapper').forEach(cardEl => {
+    document.querySelectorAll('.kanban-card-wrapper, .list-view-row').forEach(cardEl => {
       let startX = 0;
       let startY = 0;
 
@@ -276,6 +301,7 @@ export class SoloKanbanApp {
       });
 
       cardEl.addEventListener('click', (e) => {
+        if (e.target.closest('.card-quick-complete-btn')) return;
         if (cardEl.classList.contains('dragging')) return;
         const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
         if (dist >= 2) return; // Small drag movement — ignore click
@@ -319,6 +345,35 @@ export class SoloKanbanApp {
     if (searchInput) {
       searchInput.addEventListener('input', () => {
         this.state.filterSearch = searchInput.value;
+        this.refreshBoard();
+      });
+    }
+
+    // Global Cmd+K / Ctrl+K search shortcut (Asana / Trello style)
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
+    });
+
+    // View mode toggle (Board vs List)
+    const boardBtn = document.getElementById('view-btn-board');
+    const listBtn = document.getElementById('view-btn-list');
+    if (boardBtn && listBtn) {
+      boardBtn.addEventListener('click', () => {
+        this.state.viewMode = 'board';
+        boardBtn.classList.add('active');
+        listBtn.classList.remove('active');
+        this.refreshBoard();
+      });
+      listBtn.addEventListener('click', () => {
+        this.state.viewMode = 'list';
+        listBtn.classList.add('active');
+        boardBtn.classList.remove('active');
         this.refreshBoard();
       });
     }

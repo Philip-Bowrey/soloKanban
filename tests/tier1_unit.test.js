@@ -132,4 +132,38 @@ describe('Tier 1 — Unit Tests', () => {
       assert.ok(status.label.includes('Overdue'));
     });
   });
+
+  describe('Modern UI Components & Badges', () => {
+    it('renders quick-complete check circle and summary badges on card face', () => {
+      const card = {
+        id: 'FEAT-001',
+        type: 'feature',
+        frontmatter: {
+          title: 'Implement Payment Gateway',
+          attachments: ['receipt.pdf'],
+          listId: 'in-progress'
+        },
+        body: '## Description\nPayment integration flow\n\n## Tasks\n- [x] API client\n- [ ] Webhook'
+      };
+
+      const html = renderCardFace(card, { labels: [] });
+      assert.ok(html.includes('card-quick-complete-btn'), 'Should render quick complete button');
+      assert.ok(html.includes('📎 1'), 'Should render attachment count chip');
+      assert.ok(html.includes('card-summary-icon'), 'Should render summary icons');
+      assert.ok(html.includes('card-progress-ring'), 'Should render checklist progress ring');
+    });
+
+    it('renders checked circle when card listId is done', () => {
+      const card = {
+        id: 'FEAT-002',
+        type: 'feature',
+        frontmatter: { title: 'Finished item', listId: 'done' },
+        body: 'Done'
+      };
+
+      const html = renderCardFace(card, { labels: [] });
+      assert.ok(html.includes('is-done'), 'Should have is-done class');
+      assert.ok(html.includes('✓'), 'Should render checkmark symbol');
+    });
+  });
 });
