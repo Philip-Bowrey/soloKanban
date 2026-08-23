@@ -153,6 +153,7 @@ button:disabled {
     box-shadow: var(--shadow);
     cursor: grab;
     transition: transform 0.1s;
+    user-select: none;
 }
 
 .card:active {
@@ -305,12 +306,12 @@ button:disabled {
 }
 
 .modal-footer {
-    padding: 12px 16px;
+    padding: 8px 16px;
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 10px;
+    min-height: 30px;
 }
 
 .conflict-warning {
@@ -348,15 +349,65 @@ button:disabled {
     resize: vertical;
 }
 
-.checklist-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
+/* Markdown rendered area */
+.markdown-rendered {
+    width: 100%;
+    min-height: 30px;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: text;
+    transition: border-color 0.2s;
 }
 
-.checklist-item input[type="checkbox"] {
-    width: auto;
+.markdown-rendered:hover {
+    border-color: var(--border);
+}
+
+.markdown-rendered h1, .markdown-rendered h2, .markdown-rendered h3 {
+    margin: 0.5em 0 0.2em;
+}
+
+.markdown-rendered p {
+    margin: 0.3em 0;
+}
+
+.markdown-rendered ul, .markdown-rendered ol {
+    padding-left: 20px;
+    margin: 0.3em 0;
+}
+
+/* Tooltip */
+.tooltip-icon {
+    display: inline-block;
+    margin-left: 4px;
+    cursor: help;
+    color: var(--muted);
+    font-size: 0.8rem;
+    vertical-align: middle;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 0.75rem;
+}
+
+.tooltip-icon:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
 }
 
 .section-heading {
@@ -365,6 +416,9 @@ button:disabled {
     margin-bottom: 8px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Responsive */
