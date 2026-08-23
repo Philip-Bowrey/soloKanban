@@ -158,14 +158,21 @@ export class BoardRenderer {
         <div class="column-header">
           <div class="column-title-bar">
             <h3 class="column-title">${escapeHtml(list.name)}</h3>
-            ${wipBadgeHtml}
-            <button class="btn-icon collapse-list-btn" title="Collapse column">◀</button>
+            <div class="column-actions">
+              ${wipBadgeHtml}
+              <button class="btn-icon btn-add-card-header" data-list-id="${list.id}" title="Add Card">+</button>
+              <button class="btn-icon collapse-list-btn" title="Collapse column">◀</button>
+            </div>
           </div>
           ${statsHtml}
         </div>
 
         <div class="column-cards-container" data-list-id="${list.id}">
           ${cardElementsHtml.join('')}
+        </div>
+
+        <div class="column-footer">
+          <button class="btn-add-card-footer" data-list-id="${list.id}">+ Add Card</button>
         </div>
       </div>`;
   }

@@ -243,4 +243,145 @@ export class WorkspaceManager {
       });
     }
   }
+
+  /**
+   * Creates a new project card and initializes its project board directory.
+   */
+  async createProjectCard(title = 'New Project', listId = 'backlog') {
+    let maxNum = 0;
+    for (const cardId of this.db.cards.keys()) {
+      if (cardId.startsWith('PROJ-')) {
+        const num = parseInt(cardId.replace('PROJ-', ''), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+    const nextNumStr = String(maxNum + 1).padStart(4, '0');
+    const projCode = `PROJ_${nextNumStr}`;
+    const cardId = `PROJ-${nextNumStr}`;
+
+    const frontmatter = {
+      title,
+      projectId: projCode,
+      listId,
+      status: 'active',
+      meta: {
+        revision: 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'human'
+      }
+    };
+    const body = `## Project Summary\nBrief overview of the project goal...\n\n## Scope & Boundaries\nKey deliverables...\n\n## Activity Log\n- [${new Date().toISOString()}] Project card created`;
+    frontmatter.meta.contentHash = await computeContentHash(frontmatter, body);
+
+    const filePath = `projects/${cardId}.md`;
+    await this.fsAdapter.writeFile(filePath, serializeCardFile(frontmatter, body));
+
+    await this.fsAdapter.ensureDirectory(projCode);
+    await this.fsAdapter.ensureDirectory(`${projCode}/features`);
+    await this.fsAdapter.ensureDirectory(`${projCode}/wiki`);
+
+    const projConfig = {
+      id: projCode,
+      lists: [
+        { id: 'backlog', name: 'Backlog' },
+        { id: 'in-progress', name: 'In Progress' },
+        { id: 'done', name: 'Done', done: true }
+      ],
+      featureOrder: { backlog: [], 'in-progress': [], done: [] },
+      layout: { dividers: [] }
+    };
+    await this.fsAdapter.writeFile(`${projCode}/project.json`, JSON.stringify(projConfig, null, 2));
+
+    const wsConfigStr = await this.fsAdapter.readFile('workspace.json');
+    const wsConfig = wsConfigStr ? JSON.parse(wsConfigStr) : { featureOrder: {} };
+    if (!wsConfig.featureOrder) wsConfig.featureOrder = {};
+    if (!wsConfig.featureOrder[listId]) wsConfig.featureOrder[listId] = [];
+    wsConfig.featureOrder[listId].push(cardId);
+    await this.fsAdapter.writeFile('workspace.json', JSON.stringify(wsConfig, null, 2));
+
+    const cardRecord = {
+      id: cardId,
+      type: 'project',
+      frontmatter,
+      body,
+      _filePath: filePath,
+      _isTrash: false
+    };
+    this.db.cards.set(cardId, cardRecord);
+    this.db.projects.set(projCode, projConfig);
+    await this.db.rebuildSearchIndex();
+
+    return cardRecord;
+  }
+
+  /**
+   * Creates a new feature card under a project.
+   */
+  async createFeatureCard(projectId, type = 'feature', title = 'New Feature', listId = 'backlog') {
+    let maxNum = 0;
+    const prefix = `${projectId}-`;
+    for (const cardId of this.db.cards.keys()) {
+      if (cardId.startsWith(prefix)) {
+        const num = parseInt(cardId.replace(prefix, ''), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+    const nextNumStr = String(maxNum + 1).padStart(4, '0');
+    const cardId = `${projectId}-${nextNumStr}`;
+
+    const frontmatter = {
+      title,
+      listId,
+      priority: 'medium',
+      assignee: '',
+      meta: {
+        revision: 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'human'
+      }
+    };
+
+    const featureTypeDef = (this.db.featureTypes || []).find(t => t.id === type);
+    let bodySections = [];
+    if (featureTypeDef && featureTypeDef.bodySections) {
+      for (const sec of featureTypeDef.bodySections) {
+        if (sec.type === 'checklist') {
+          bodySections.push(`## ${sec.label}\n- [ ] Task 1`);
+        } else {
+          bodySections.push(`## ${sec.label}\n${sec.placeholder || ''}`);
+        }
+      }
+    } else {
+      bodySections.push('## Description\nFeature specification...');
+    }
+    bodySections.push(`## Activity Log\n- [${new Date().toISOString()}] Feature card created`);
+    const body = bodySections.join('\n\n');
+
+    frontmatter.meta.contentHash = await computeContentHash(frontmatter, body);
+
+    const filePath = `${projectId}/features/${cardId}.md`;
+    await this.fsAdapter.writeFile(filePath, serializeCardFile(frontmatter, body));
+
+    const projConfigStr = await this.fsAdapter.readFile(`${projectId}/project.json`);
+    const projConfig = projConfigStr ? JSON.parse(projConfigStr) : { featureOrder: {} };
+    if (!projConfig.featureOrder) projConfig.featureOrder = {};
+    if (!projConfig.featureOrder[listId]) projConfig.featureOrder[listId] = [];
+    projConfig.featureOrder[listId].push(cardId);
+    await this.fsAdapter.writeFile(`${projectId}/project.json`, JSON.stringify(projConfig, null, 2));
+
+    const cardRecord = {
+      id: cardId,
+      projectId,
+      type,
+      frontmatter,
+      body,
+      _filePath: filePath,
+      _isTrash: false
+    };
+    this.db.cards.set(cardId, cardRecord);
+    this.db.projects.set(projectId, projConfig);
+    await this.db.rebuildSearchIndex();
+
+    return cardRecord;
+  }
 }

@@ -121,6 +121,30 @@ export class SoloKanbanApp {
     }
   }
 
+  async handleCreateCard(listId = 'backlog') {
+    if (!this.workspaceManager) {
+      alert('Please open a workspace folder first using the "📁 Open Workspace Folder" button.');
+      return;
+    }
+
+    let newCardRecord = null;
+    if (this.state.currentView === 'workspace') {
+      const title = prompt('Enter Project Name:', 'New Project');
+      if (title === null) return;
+      newCardRecord = await this.workspaceManager.createProjectCard(title || 'New Project', listId);
+    } else {
+      const projId = this.state.currentProjectId;
+      const title = prompt('Enter Feature Card Title:', 'New Feature');
+      if (title === null) return;
+      newCardRecord = await this.workspaceManager.createFeatureCard(projId, 'feature', title || 'New Feature', listId);
+    }
+
+    this.refreshBoard();
+    if (newCardRecord) {
+      this.cardModal.open(newCardRecord);
+    }
+  }
+
   refreshBoard() {
     const boardContainer = document.getElementById('kanban-board-container');
     if (!boardContainer) return;
@@ -128,12 +152,22 @@ export class SoloKanbanApp {
     this.boardRenderer.renderBoard(boardContainer);
     this.dragDropHandler.attachListeners(boardContainer);
     this.bindCardClickListeners();
+    this.bindAddCardButtons();
+  }
+
+  bindAddCardButtons() {
+    document.querySelectorAll('.btn-add-card-header, .btn-add-card-footer').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const listId = btn.dataset.listId || 'backlog';
+        this.handleCreateCard(listId);
+      });
+    });
   }
 
   bindCardClickListeners() {
     document.querySelectorAll('.kanban-card-wrapper').forEach(cardEl => {
       cardEl.addEventListener('click', (e) => {
-        // Prevent opening modal if dragging
         if (cardEl.classList.contains('dragging')) return;
 
         const cardId = cardEl.dataset.cardId;
@@ -141,13 +175,11 @@ export class SoloKanbanApp {
         if (!card) return;
 
         if (card.type === 'project' && this.state.currentView === 'workspace') {
-          // Open sub-project board
           this.state.currentView = 'project';
           this.state.currentProjectId = card.frontmatter.projectId || card.id;
           this.renderHeader();
           this.refreshBoard();
         } else {
-          // Open Card Modal
           this.cardModal.open(card);
         }
       });
@@ -155,6 +187,13 @@ export class SoloKanbanApp {
   }
 
   bindHeaderEvents() {
+    const createCardBtn = document.getElementById('create-card-btn');
+    if (createCardBtn) {
+      createCardBtn.addEventListener('click', () => {
+        this.handleCreateCard('backlog');
+      });
+    }
+
     const openFolderBtn = document.getElementById('open-folder-btn');
     if (openFolderBtn) {
       openFolderBtn.addEventListener('click', async () => {
