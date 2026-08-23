@@ -26,12 +26,13 @@ export class BoardRenderer {
     let cardsToRender = [];
 
     if (this.appState.currentView === 'workspace') {
-      config = {
+      config = db.workspaceConfig || {
         lists: [
           { id: 'backlog', name: 'Backlog' },
           { id: 'in-progress', name: 'In Progress' },
           { id: 'done', name: 'Done', done: true }
         ],
+        featureOrder: {},
         layout: { dividers: [] }
       };
       cardsToRender = Array.from(db.cards.values()).filter(c => c.type === 'project');
@@ -52,7 +53,9 @@ export class BoardRenderer {
     // Apply Filters
     cardsToRender = this.applyFilters(cardsToRender);
 
-    container.style.backgroundColor = prefs.background || '#0f172a';
+    if (container.style) {
+      container.style.backgroundColor = prefs.background || '#0f172a';
+    }
 
     if (swimlaneBy) {
       container.innerHTML = this.renderSwimlaneView(config, cardsToRender, swimlaneBy, collapsedLists);
@@ -192,7 +195,9 @@ export class BoardRenderer {
       else if (swimlaneBy === 'priority') groupKey = fm.priority || 'No Priority';
       else if (swimlaneBy === 'type') groupKey = card.type || 'Default';
 
-      if (!groups.has(groupKey)) groups.clear ? groups.set(groupKey, []) : null;
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
       groups.get(groupKey).push(card);
     }
 

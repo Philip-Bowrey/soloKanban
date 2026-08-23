@@ -51,6 +51,9 @@ export class WorkspaceManager {
     if (!(await this.fsAdapter.readFile('.solokanban/preferences.json'))) {
       await this.fsAdapter.writeFile('.solokanban/preferences.json', JSON.stringify(DEFAULT_PREFERENCES, null, 2));
     }
+    if (!(await this.fsAdapter.readFile('.solokanban/agents.json'))) {
+      await this.fsAdapter.writeFile('.solokanban/agents.json', JSON.stringify([], null, 2));
+    }
   }
 
   /**
@@ -72,6 +75,7 @@ export class WorkspaceManager {
     // 2. Load workspace config
     const workspaceConfigStr = await this.fsAdapter.readFile('workspace.json');
     const workspaceConfig = workspaceConfigStr ? JSON.parse(workspaceConfigStr) : DEFAULT_WORKSPACE_CONFIG;
+    this.db.workspaceConfig = workspaceConfig;
 
     // 3. Scan workspace project cards (/projects/*.md)
     const projectCardFiles = await this.fsAdapter.listFiles('projects');
@@ -383,5 +387,78 @@ export class WorkspaceManager {
     await this.db.rebuildSearchIndex();
 
     return cardRecord;
+  }
+
+  /**
+   * Complete soft-delete of a project:
+   * 1. Moves the sub-project directory to .solokanban/trash/ (via fsAdapter.softDeleteProject)
+   * 2. Finds and deletes the corresponding project card in /projects/ (<cardId>.md)
+   * 3. Removes the project card ID from workspace.json featureOrder
+   * 4. Updates in-memory db (db.projects, db.cards, db.workspaceConfig)
+   * 5. Rebuilds search index
+   */
+  async softDeleteProjectFull(projectId) {
+    if (!this.fsAdapter || !projectId) return;
+
+    // 1. Move sub-project directory to trash
+    await this.fsAdapter.softDeleteProject(projectId);
+
+    // 2. Find matching project card in db.cards
+    let targetCardId = null;
+    let cardFilePath = null;
+
+    for (const [cardId, card] of this.db.cards.entries()) {
+      if (card.type === 'project' && (card.id === projectId || card.frontmatter?.projectId === projectId || card._filePath === `projects/${projectId}.md`)) {
+        targetCardId = cardId;
+        cardFilePath = card._filePath;
+        break;
+      }
+    }
+
+    if (!cardFilePath && targetCardId) {
+      cardFilePath = `projects/${targetCardId}.md`;
+    } else if (!cardFilePath) {
+      // Fallback: check if projects/<projectId>.md exists
+      if (await this.fsAdapter.readFile(`projects/${projectId}.md`)) {
+        cardFilePath = `projects/${projectId}.md`;
+        targetCardId = projectId;
+      }
+    }
+
+    // Delete card file from projects/
+    if (cardFilePath) {
+      await this.fsAdapter.deleteFile(cardFilePath);
+    }
+
+    // 3. Remove from workspace.json featureOrder
+    const wsConfigStr = await this.fsAdapter.readFile('workspace.json');
+    if (wsConfigStr) {
+      try {
+        const wsConfig = JSON.parse(wsConfigStr);
+        if (wsConfig.featureOrder) {
+          for (const listId of Object.keys(wsConfig.featureOrder)) {
+            wsConfig.featureOrder[listId] = (wsConfig.featureOrder[listId] || []).filter(
+              id => id !== targetCardId && id !== projectId
+            );
+          }
+          await this.fsAdapter.writeFile('workspace.json', JSON.stringify(wsConfig, null, 2));
+          this.db.workspaceConfig = wsConfig;
+        }
+      } catch (e) {}
+    }
+
+    // 4. Update in-memory DB
+    this.db.projects.delete(projectId);
+    if (targetCardId) {
+      this.db.cards.delete(targetCardId);
+    }
+    for (const [cardId, card] of Array.from(this.db.cards.entries())) {
+      if (card.projectId === projectId || card.id === projectId) {
+        this.db.cards.delete(cardId);
+      }
+    }
+
+    // 5. Rebuild search index
+    await this.db.rebuildSearchIndex();
   }
 }

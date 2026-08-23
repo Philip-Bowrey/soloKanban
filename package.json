@@ -5,11 +5,15 @@
   "main": "js/main.js",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/tier1_unit.test.js tests/tier2_adapter.test.js tests/tier3_concurrency.test.js tests/tier4_integration.test.js tests/tier6_regression.test.js tests/tier7_sdk.test.js tests/tier8_performance.test.js",
+    "test": "node --test tests/tier1_unit.test.js tests/tier2_adapter.test.js tests/tier3_concurrency.test.js tests/tier4_integration.test.js tests/tier6_regression.test.js tests/tier7_sdk.test.js tests/tier8_performance.test.js tests/tier9_gap_regression.test.js",
     "test:fuzz": "node --test tests/tier0_fuzz.test.js",
     "test:python": "python3 -m unittest discover -s tests -p '*.py'",
     "test:e2e": "npx playwright test",
-    "test:all": "npm test && npm run test:fuzz && npm run test:python"
+    "test:e2e:install": "npx playwright install --with-deps chromium",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:debug": "npx playwright test --debug",
+    "test:all": "npm test && npm run test:fuzz && npm run test:python && npm run test:e2e",
+    "serve": "npx http-server . -p 8080 --cors -c-1"
   },
   "keywords": [
     "kanban",

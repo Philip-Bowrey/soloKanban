@@ -153,6 +153,33 @@ export class SoloKanbanApp {
     this.dragDropHandler.attachListeners(boardContainer);
     this.bindCardClickListeners();
     this.bindAddCardButtons();
+    this.bindColumnCollapseListeners();
+  }
+
+  bindColumnCollapseListeners() {
+    document.querySelectorAll('.collapse-list-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const listId = btn.dataset.listId || btn.closest('.kanban-column')?.dataset.listId;
+        if (!listId) return;
+        const collapsed = new Set(this.preferencesManager.get('board.collapsedLists') || []);
+        collapsed.add(listId);
+        await this.preferencesManager.set('board.collapsedLists', Array.from(collapsed));
+        this.refreshBoard();
+      });
+    });
+
+    document.querySelectorAll('.column-header-collapsed, .expand-list-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const listId = el.dataset.listId || el.closest('.kanban-column')?.dataset.listId;
+        if (!listId) return;
+        const collapsed = new Set(this.preferencesManager.get('board.collapsedLists') || []);
+        collapsed.delete(listId);
+        await this.preferencesManager.set('board.collapsedLists', Array.from(collapsed));
+        this.refreshBoard();
+      });
+    });
   }
 
   bindAddCardButtons() {

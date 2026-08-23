@@ -10,6 +10,7 @@ export class SoloDb {
     this.labels = [];
     this.fields = [];
     this.featureTypes = [];
+    this.workspaceConfig = null;
     this.searchIndex = [];
   }
 
@@ -23,6 +24,7 @@ export class SoloDb {
     this.labels = [];
     this.fields = [];
     this.featureTypes = [];
+    this.workspaceConfig = null;
     this.searchIndex = [];
   }
 

@@ -13,6 +13,7 @@ export class CardModal {
     this.onSaveCallback = onSaveCallback;
     
     this.card = null;
+    this.baseCard = null;           // Gap #1 fix: stored at open() for auto-merge baseCard
     this.originalContentHash = null;
     this.originalRevision = 1;
     this.debounceTimer = null;
@@ -21,6 +22,7 @@ export class CardModal {
 
   open(card) {
     this.card = JSON.parse(JSON.stringify(card));
+    this.baseCard = JSON.parse(JSON.stringify(card)); // Gap #1 fix: snapshot at open time
     this.originalRevision = this.card.frontmatter?.meta?.revision || 1;
     this.originalContentHash = this.card.frontmatter?.meta?.contentHash || '';
     this.isRawMarkdown = false;
@@ -41,17 +43,44 @@ export class CardModal {
     this.appState.activeCard = null;
     this.appState.activeModal = null;
 
-    const modalEl = document.getElementById('card-modal');
-    if (modalEl) modalEl.remove();
+    if (typeof document !== 'undefined') {
+      const modalEl = document.getElementById('card-modal');
+      if (modalEl) modalEl.remove();
+    }
   }
 
+
   renderModalContainer() {
+    if (typeof document === 'undefined' || !document.body) return;
     let existing = document.getElementById('card-modal');
     if (existing) existing.remove();
 
+    const html = this.buildModalHtml();
+    document.body.insertAdjacentHTML('beforeend', html);
+    this.bindEvents();
+  }
+
+  /**
+   * Builds and returns the modal HTML string (separated for testability).
+   * Gap #4 fix: includes presence warning banner when active agents are editing.
+   */
+  buildModalHtml() {
     const labelsMap = new Map((this.appState.db.labels || []).map(l => [l.id, l]));
     const fieldsMap = new Map((this.appState.db.fields || []).map(f => [f.key, f]));
     const fm = this.card.frontmatter || {};
+
+    // Gap #4 fix: Presence warning (§6.2) — warn if another actor is editing this card
+    const activePresence = (this.appState.activePresenceMap?.get(this.card.id) || []);
+    const presenceWarningHtml = activePresence.length > 0
+      ? `<div class="presence-warning">
+           <span class="presence-warning-icon">⚠</span>
+           <span class="presence-warning-text">
+             ${escapeHtml(activePresence[0].actor)} is currently editing this card
+             ${activePresence.length > 1 ? `and ${activePresence.length - 1} other(s)` : ''}.
+             Saving may trigger conflict resolution.
+           </span>
+         </div>`
+      : '';
 
     // Label Editor with v8.3 Label Deletion Fallback
     const cardLabels = fm.labels || [];
@@ -93,14 +122,26 @@ export class CardModal {
       }
     }).join('');
 
+    // Extract section descriptions from feature type for heading tooltips (PRD §16.2)
+    const sectionDescriptions = {};
+    const cardType = (this.appState.db.featureTypes || []).find(t => t.id === this.card.type);
+    if (cardType?.bodySections) {
+      for (const s of cardType.bodySections) {
+        if (s.placeholder || s.label) {
+          sectionDescriptions[s.label] = s.placeholder || s.label;
+        }
+      }
+    }
+
     // Body Editor (Raw vs Rendered)
     const bodyHtml = this.isRawMarkdown
       ? `<textarea id="modal-body-editor" class="modal-textarea">${escapeHtml(this.card.body || '')}</textarea>`
-      : `<div id="modal-body-rendered" class="rendered-markdown-box">${renderMarkdown(this.card.body || '')}</div>`;
+      : `<div id="modal-body-rendered" class="rendered-markdown-box">${renderMarkdown(this.card.body || '', sectionDescriptions)}</div>`;
 
-    const html = `
+    return `
       <div id="card-modal" class="modal-overlay">
         <div class="modal-content card-modal-dialog">
+          ${presenceWarningHtml}
           <div class="modal-header">
             <div class="modal-title-container">
               <input type="text" id="modal-title-input" class="modal-title-input" value="${escapeHtml(fm.title || this.card.id)}"/>
@@ -153,10 +194,8 @@ export class CardModal {
           </div>
         </div>
       </div>`;
-
-    document.body.insertAdjacentHTML('beforeend', html);
-    this.bindEvents();
   }
+
 
   bindEvents() {
     const modalEl = document.getElementById('card-modal');
@@ -242,8 +281,10 @@ export class CardModal {
   }
 
   scheduleAutoSave() {
-    const statusEl = document.getElementById('auto-save-status');
-    if (statusEl) statusEl.textContent = 'Saving...';
+    if (typeof document !== 'undefined') {
+      const statusEl = document.getElementById('auto-save-status');
+      if (statusEl) statusEl.textContent = 'Saving...';
+    }
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
@@ -265,7 +306,7 @@ export class CardModal {
       // If disk content has changed since we loaded/last saved
       if (diskHash !== this.originalContentHash) {
         // Attempt Disjoint Auto-Merge Fast Path per PRD §6.5.1
-        const mergedResult = this.attemptAutoMerge(this.card, diskParsed);
+        const mergedResult = this.attemptAutoMerge(this.card, diskParsed, this.baseCard);
         if (mergedResult.success) {
           this.card = mergedResult.mergedCard;
         } else {
@@ -287,12 +328,15 @@ export class CardModal {
 
     this.originalRevision = this.card.frontmatter.meta.revision;
     this.originalContentHash = this.card.frontmatter.meta.contentHash;
+    this.baseCard = JSON.parse(JSON.stringify(this.card));
 
     // Update in-memory DB card record
     this.appState.db.cards.set(this.card.id, this.card);
 
-    const statusEl = document.getElementById('auto-save-status');
-    if (statusEl) statusEl.textContent = 'Saved';
+    if (typeof document !== 'undefined') {
+      const statusEl = document.getElementById('auto-save-status');
+      if (statusEl) statusEl.textContent = 'Saved';
+    }
 
     if (this.onSaveCallback) this.onSaveCallback();
   }
@@ -382,6 +426,8 @@ export class CardModal {
   }
 
   showMergeModal(localCard, incomingParsed) {
+    if (typeof document === 'undefined' || !document.body) return;
+
     let existing = document.getElementById('merge-modal');
     if (existing) existing.remove();
 

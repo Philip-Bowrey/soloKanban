@@ -21,9 +21,10 @@ export function escapeHtml(text) {
 /**
  * Renders Markdown text to HTML.
  * @param {string} mdText 
+ * @param {Object} [sectionDescriptions] Optional map of section label/id to tooltip text (PRD §16.2)
  * @returns {string}
  */
-export function renderMarkdown(mdText) {
+export function renderMarkdown(mdText, sectionDescriptions = {}) {
   if (!mdText || typeof mdText !== 'string') return '';
   const lines = mdText.split('\n');
   const htmlLines = [];
@@ -52,11 +53,20 @@ export function renderMarkdown(mdText) {
 
     // Headings
     if (line.startsWith('### ')) {
-      htmlLines.push(`<h3>${renderInline(line.substring(4))}</h3>`);
+      const title = line.substring(4).trim();
+      const desc = sectionDescriptions[title] || sectionDescriptions[title.toLowerCase()];
+      const titleAttr = desc ? ` title="${escapeHtml(desc)}"` : '';
+      htmlLines.push(`<h3${titleAttr}>${renderInline(title)}</h3>`);
     } else if (line.startsWith('## ')) {
-      htmlLines.push(`<h2>${renderInline(line.substring(3))}</h2>`);
+      const title = line.substring(3).trim();
+      const desc = sectionDescriptions[title] || sectionDescriptions[title.toLowerCase()];
+      const titleAttr = desc ? ` title="${escapeHtml(desc)}"` : '';
+      htmlLines.push(`<h2${titleAttr}>${renderInline(title)}</h2>`);
     } else if (line.startsWith('# ')) {
-      htmlLines.push(`<h1>${renderInline(line.substring(2))}</h1>`);
+      const title = line.substring(2).trim();
+      const desc = sectionDescriptions[title] || sectionDescriptions[title.toLowerCase()];
+      const titleAttr = desc ? ` title="${escapeHtml(desc)}"` : '';
+      htmlLines.push(`<h1${titleAttr}>${renderInline(title)}</h1>`);
     } else if (line.startsWith('> ')) {
       htmlLines.push(`<blockquote>${renderInline(line.substring(2))}</blockquote>`);
     } else {
