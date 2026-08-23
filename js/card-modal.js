@@ -3,9 +3,9 @@
  * Features 800ms auto-save debounce, raw/rendered Markdown toggle, disjoint auto-merge, and label deletion fallback.
  */
 
-import { parseCardFile, serializeCardFile } from './yaml.js';
+import { parseCardFile, serializeCardFile, serializeYaml } from './yaml.js';
 import { computeContentHash } from './hash.js';
-import { parseBodySections, appendActivityLog, renderMarkdown, escapeHtml } from './markdown.js';
+import { parseBodySections, appendActivityLog, mergeActivityLogs, renderMarkdown, escapeHtml } from './markdown.js';
 import { parseChecklist, calculateProgress } from './checklist.js';
 
 export class CardModal {
@@ -355,7 +355,39 @@ export class CardModal {
             }
             this.card.body = bodyLines.join('\n');
             this.scheduleAutoSave();
-            this.renderModalContainer();
+
+            // Targeted in-place DOM update: append <li> and preserve focus (UI #1 & #2)
+            const newLi = document.createElement('li');
+            newLi.className = 'task-list-item';
+            const currentTotalTasks = renderedBox.querySelectorAll('.task-checkbox').length;
+            newLi.innerHTML = `<input type="checkbox" class="task-checkbox" data-task-index="${currentTotalTasks}"> <span class="task-label">${escapeHtml(text)}</span>`;
+            ul.appendChild(newLi);
+
+            // Wire change listener on new checkbox
+            const newCb = newLi.querySelector('.task-checkbox');
+            newCb.addEventListener('change', () => {
+              const bodyLines = (this.card.body || '').split('\n');
+              let taskIdx = parseInt(newCb.dataset.taskIndex, 10);
+              let cIdx = 0;
+              for (let i = 0; i < bodyLines.length; i++) {
+                const m = bodyLines[i].match(/^(\s*[-*]\s*\[)([ xX?])(\]\s*.*)$/);
+                if (m) {
+                  if (cIdx === taskIdx) {
+                    bodyLines[i] = `${m[1]}${newCb.checked ? 'x' : ' '}${m[3]}`;
+                    break;
+                  }
+                  cIdx++;
+                }
+              }
+              this.card.body = bodyLines.join('\n');
+              this.scheduleAutoSave();
+              newLi.classList.toggle('is-checked', newCb.checked);
+              this.updateProgressBarInPlace();
+            });
+
+            this.updateProgressBarInPlace();
+            input.value = '';
+            input.focus();
           };
 
           input.addEventListener('keydown', (e) => {
@@ -403,7 +435,32 @@ export class CardModal {
                 }
                 this.card.body = bodyLines.join('\n');
                 this.scheduleAutoSave();
-                this.renderModalContainer();
+
+                // Create UL list directly after heading
+                const newUl = document.createElement('ul');
+                newUl.innerHTML = `<li class="task-list-item"><input type="checkbox" class="task-checkbox" data-task-index="0"> <span class="task-label">${escapeHtml(text)}</span></li>`;
+                heading.after(newUl);
+                newUl.after(addRow);
+
+                const newCb = newUl.querySelector('.task-checkbox');
+                newCb.addEventListener('change', () => {
+                  const bLines = (this.card.body || '').split('\n');
+                  for (let i = 0; i < bLines.length; i++) {
+                    const m = bLines[i].match(/^(\s*[-*]\s*\[)([ xX?])(\]\s*.*)$/);
+                    if (m) {
+                      bLines[i] = `${m[1]}${newCb.checked ? 'x' : ' '}${m[3]}`;
+                      break;
+                    }
+                  }
+                  this.card.body = bLines.join('\n');
+                  this.scheduleAutoSave();
+                  newUl.querySelector('.task-list-item').classList.toggle('is-checked', newCb.checked);
+                  this.updateProgressBarInPlace();
+                });
+
+                this.updateProgressBarInPlace();
+                input.value = '';
+                input.focus();
               }
             });
           }
@@ -528,6 +585,17 @@ export class CardModal {
     });
   }
 
+  updateProgressBarInPlace() {
+    const checklistItems = parseChecklist(this.card.body || '');
+    const progress = calculateProgress(checklistItems);
+    const pctBadge = document.querySelector('.modal-checklist-pct-badge');
+    const countText = document.querySelector('.modal-checklist-count-text');
+    const fill = document.querySelector('.modal-checklist-progress-fill');
+    if (pctBadge) pctBadge.textContent = `${progress.percentage}% completed`;
+    if (countText) countText.textContent = `${progress.completed} of ${progress.total} tasks`;
+    if (fill) fill.style.width = `${progress.percentage}%`;
+  }
+
   scheduleAutoSave() {
     if (typeof document !== 'undefined') {
       const statusEl = document.getElementById('auto-save-status');
@@ -578,8 +646,11 @@ export class CardModal {
     this.originalContentHash = this.card.frontmatter.meta.contentHash;
     this.baseCard = JSON.parse(JSON.stringify(this.card));
 
-    // Update in-memory DB card record
+    // Update in-memory DB card record & rebuild search index (PRD §18)
     this.appState.db.cards.set(this.card.id, this.card);
+    if (this.appState.db.rebuildSearchIndex) {
+      this.appState.db.rebuildSearchIndex();
+    }
 
     if (typeof document !== 'undefined') {
       const statusEl = document.getElementById('auto-save-status');
@@ -635,10 +706,15 @@ export class CardModal {
     const mergedSectionsMap = new Map();
     let hasConflict = false;
 
-    const allSectionIds = new Set([
+    // Canonical ordering from feature type if available
+    const cardType = (this.appState.db.featureTypes || []).find(t => t.id === localCard.type);
+    const definedOrder = cardType?.bodySections?.map(s => s.label.toLowerCase().replace(/[^a-z0-9]/g, '-')) || [];
+
+    const allSectionIds = Array.from(new Set([
+      ...definedOrder,
       ...localSections.sections.map(s => s.id),
       ...incomingSections.sections.map(s => s.id)
-    ]);
+    ]));
 
     for (const id of allSectionIds) {
       const localSec = localSections.sections.find(s => s.id === id);
@@ -648,8 +724,6 @@ export class CardModal {
         if (localSec.content === incSec.content) {
           mergedSectionsMap.set(id, { title: localSec.title, content: localSec.content });
         } else {
-          // One side edited section, other side didn't (or both edited same section -> conflict)
-          // If baseCard is provided, check which side changed; otherwise if one section content matches base or is empty
           if (baseCard) {
             const baseSec = parseBodySections(baseCard.body).sections.find(s => s.id === id);
             const baseContent = baseSec ? baseSec.content : '';
@@ -662,7 +736,6 @@ export class CardModal {
               break;
             }
           } else {
-            // Heuristic: if one side edited and the other side is unchanged or disjoint
             hasConflict = true;
             break;
           }
@@ -679,10 +752,13 @@ export class CardModal {
     // Build merged body
     const bodyParts = [];
     for (const [id, secObj] of mergedSectionsMap.entries()) {
-      bodyParts.push(`## ${secObj.title || id}\n${secObj.content}`);
+      if (secObj.content !== undefined) {
+        bodyParts.push(`## ${secObj.title || id}\n${secObj.content}`);
+      }
     }
     if (localSections.activityLog || incomingSections.activityLog) {
-      bodyParts.push(`## Activity Log\n${localSections.activityLog}\n${incomingSections.activityLog}`);
+      const mergedLog = mergeActivityLogs(localSections.activityLog, incomingSections.activityLog);
+      bodyParts.push(`## Activity Log\n${mergedLog}`);
     }
 
     const mergedCard = JSON.parse(JSON.stringify(localCard));
@@ -698,21 +774,133 @@ export class CardModal {
     let existing = document.getElementById('merge-modal');
     if (existing) existing.remove();
 
+    const localSections = parseBodySections(localCard.body);
+    const incomingSections = parseBodySections(incomingParsed.body);
+
+    const allSectionIds = Array.from(new Set([
+      ...localSections.sections.map(s => s.id),
+      ...incomingSections.sections.map(s => s.id)
+    ]));
+
+    const sectionRowsHtml = allSectionIds.map(id => {
+      const localSec = localSections.sections.find(s => s.id === id) || { title: id, content: '' };
+      const incSec = incomingSections.sections.find(s => s.id === id) || { title: id, content: '' };
+      const isDiff = localSec.content !== incSec.content;
+
+      return `
+        <div class="merge-section-row ${isDiff ? 'is-conflict' : 'is-matched'}" data-section-id="${escapeHtml(id)}">
+          <div class="merge-section-title">
+            <strong>## ${escapeHtml(localSec.title || incSec.title || id)}</strong>
+            ${isDiff ? '<span class="conflict-badge">Conflict</span>' : '<span class="matched-badge">Identical</span>'}
+          </div>
+          <div class="merge-section-diff-grid">
+            <div class="diff-pane local-pane">
+              <div class="diff-pane-header">
+                <span>My Local Version</span>
+                <button type="button" class="btn-xs btn-pick-local" data-section-id="${escapeHtml(id)}">Keep Local</button>
+              </div>
+              <textarea class="diff-editor local-diff-text" data-section-id="${escapeHtml(id)}">${escapeHtml(localSec.content)}</textarea>
+            </div>
+            <div class="diff-pane incoming-pane">
+              <div class="diff-pane-header">
+                <span>Incoming Version</span>
+                <button type="button" class="btn-xs btn-pick-incoming" data-section-id="${escapeHtml(id)}">Accept Incoming</button>
+              </div>
+              <textarea class="diff-editor incoming-diff-text" data-section-id="${escapeHtml(id)}" readonly>${escapeHtml(incSec.content)}</textarea>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const localFmYaml = serializeYaml(localCard.frontmatter || {});
+    const incFmYaml = serializeYaml(incomingParsed.frontmatter || {});
+
     const html = `
       <div id="merge-modal" class="modal-overlay">
         <div class="modal-content merge-modal-dialog">
-          <h3>Conflict Detected (Stale Write)</h3>
-          <p>Another user or agent modified this card while you were editing.</p>
+          <div class="merge-modal-header">
+            <h3>🔀 Conflict Resolution (Stale Write Detected)</h3>
+            <p>Another user or agent modified this card concurrently. Choose which changes to keep for each section.</p>
+          </div>
 
-          <div class="merge-choice-container">
-            <button id="btn-keep-local" class="btn-primary">Keep My Local Edits</button>
-            <button id="btn-accept-incoming" class="btn-secondary">Accept Incoming Edits</button>
+          <div class="merge-global-actions">
+            <button id="btn-keep-local" class="btn-primary">Keep All Local</button>
+            <button id="btn-accept-incoming" class="btn-secondary">Accept All Incoming</button>
+          </div>
+
+          <div class="merge-frontmatter-container">
+            <h4>Frontmatter (Metadata)</h4>
+            <div class="merge-frontmatter-grid">
+              <div class="diff-pane">
+                <div class="diff-pane-header">
+                  <span>My Local Frontmatter</span>
+                  <button type="button" id="btn-pick-local-fm" class="btn-xs active">Keep Local Frontmatter</button>
+                </div>
+                <pre class="yaml-diff-box">${escapeHtml(localFmYaml)}</pre>
+              </div>
+              <div class="diff-pane">
+                <div class="diff-pane-header">
+                  <span>Incoming Frontmatter</span>
+                  <button type="button" id="btn-pick-incoming-fm" class="btn-xs">Accept Incoming Frontmatter</button>
+                </div>
+                <pre class="yaml-diff-box">${escapeHtml(incFmYaml)}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="merge-sections-container">
+            <h4>Body Sections</h4>
+            ${sectionRowsHtml}
+          </div>
+
+          <div class="merge-modal-footer">
+            <button id="btn-confirm-merge" class="btn-gradient btn-lg">Save Resolved Card</button>
           </div>
         </div>
       </div>`;
 
     document.body.insertAdjacentHTML('beforeend', html);
 
+    let chosenFm = localCard.frontmatter;
+
+    document.getElementById('btn-pick-local-fm')?.addEventListener('click', () => {
+      chosenFm = localCard.frontmatter;
+      document.getElementById('btn-pick-local-fm').classList.add('active');
+      document.getElementById('btn-pick-incoming-fm').classList.remove('active');
+    });
+
+    document.getElementById('btn-pick-incoming-fm')?.addEventListener('click', () => {
+      chosenFm = incomingParsed.frontmatter;
+      document.getElementById('btn-pick-incoming-fm').classList.add('active');
+      document.getElementById('btn-pick-local-fm').classList.remove('active');
+    });
+
+    // Section-by-section buttons
+    document.querySelectorAll('.btn-pick-incoming').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const secId = btn.dataset.sectionId;
+        const incSec = incomingSections.sections.find(s => s.id === secId);
+        const localTextarea = document.querySelector(`.local-diff-text[data-section-id="${secId}"]`);
+        if (localTextarea && incSec) {
+          localTextarea.value = incSec.content;
+          localTextarea.classList.add('accepted-incoming');
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-pick-local').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const secId = btn.dataset.sectionId;
+        const localSec = localSections.sections.find(s => s.id === secId);
+        const localTextarea = document.querySelector(`.local-diff-text[data-section-id="${secId}"]`);
+        if (localTextarea && localSec) {
+          localTextarea.value = localSec.content;
+          localTextarea.classList.remove('accepted-incoming');
+        }
+      });
+    });
+
+    // Global buttons (used in tests & fast flow)
     document.getElementById('btn-keep-local').addEventListener('click', async () => {
       document.getElementById('merge-modal').remove();
       this.originalContentHash = await computeContentHash(incomingParsed.frontmatter, incomingParsed.body);
@@ -723,6 +911,28 @@ export class CardModal {
       document.getElementById('merge-modal').remove();
       this.card.frontmatter = incomingParsed.frontmatter;
       this.card.body = incomingParsed.body;
+      this.renderModalContainer();
+    });
+
+    // Granular resolved merge
+    document.getElementById('btn-confirm-merge').addEventListener('click', async () => {
+      const mergedBodyParts = [];
+      for (const id of allSectionIds) {
+        const sec = localSections.sections.find(s => s.id === id) || incomingSections.sections.find(s => s.id === id);
+        const textarea = document.querySelector(`.local-diff-text[data-section-id="${id}"]`);
+        const content = textarea ? textarea.value : (sec ? sec.content : '');
+        mergedBodyParts.push(`## ${sec?.title || id}\n${content}`);
+      }
+      if (localSections.activityLog || incomingSections.activityLog) {
+        const mergedLog = mergeActivityLogs(localSections.activityLog, incomingSections.activityLog);
+        mergedBodyParts.push(`## Activity Log\n${mergedLog}`);
+      }
+
+      document.getElementById('merge-modal').remove();
+      this.card.frontmatter = chosenFm;
+      this.card.body = mergedBodyParts.join('\n\n');
+      this.originalContentHash = await computeContentHash(incomingParsed.frontmatter, incomingParsed.body);
+      await this.saveCard();
       this.renderModalContainer();
     });
   }

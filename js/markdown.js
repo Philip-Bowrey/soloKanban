@@ -223,3 +223,21 @@ export function appendActivityLog(body, entry) {
 
   return bodyParts.join('\n').trim();
 }
+
+/**
+ * Merges two activity logs chronologically with deduplication (PRD §6.5.3).
+ * @param {string} logA 
+ * @param {string} logB 
+ * @returns {string}
+ */
+export function mergeActivityLogs(logA = '', logB = '') {
+  const lines = `${logA}\n${logB}`.split('\n').map(l => l.trim()).filter(Boolean);
+  const uniqueLines = Array.from(new Set(lines));
+  uniqueLines.sort((a, b) => {
+    const timeA = a.match(/\[(\d{4}-\d{2}-\d{2}[^\]]*)\]/)?.[1] || '';
+    const timeB = b.match(/\[(\d{4}-\d{2}-\d{2}[^\]]*)\]/)?.[1] || '';
+    return timeA.localeCompare(timeB);
+  });
+  return uniqueLines.join('\n');
+}
+

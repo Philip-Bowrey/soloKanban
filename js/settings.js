@@ -35,6 +35,7 @@ export class SettingsModal {
             <button class="tab-btn ${this.activeTab === 'labels' ? 'active' : ''}" data-tab="labels">Labels</button>
             <button class="tab-btn ${this.activeTab === 'fields' ? 'active' : ''}" data-tab="fields">Custom Fields</button>
             <button class="tab-btn ${this.activeTab === 'types' ? 'active' : ''}" data-tab="types">Feature Types</button>
+            <button class="tab-btn ${this.activeTab === 'lists' ? 'active' : ''}" data-tab="lists">Lists & WIP</button>
             <button class="tab-btn ${this.activeTab === 'projects' ? 'active' : ''}" data-tab="projects">Projects</button>
             <button class="tab-btn ${this.activeTab === 'preferences' ? 'active' : ''}" data-tab="preferences">Preferences</button>
           </div>
@@ -103,6 +104,32 @@ export class SettingsModal {
           <p class="section-desc">Feature card templates with custom sections and fields.</p>
           <div class="types-list-container">${rows || '<p>No feature types configured.</p>'}</div>
           <button id="btn-add-new-type" class="btn-secondary">+ Add Feature Type</button>
+        </div>`;
+    } else if (this.activeTab === 'lists') {
+      let currentLists = [];
+      if (this.appState.currentView === 'project' && this.appState.currentProjectId) {
+        const proj = this.appState.db.projects.get(this.appState.currentProjectId);
+        currentLists = proj?.lists || [];
+      } else {
+        currentLists = this.appState.db.workspaceConfig?.lists || [];
+      }
+
+      const rows = currentLists.map(l => `
+        <div class="settings-item-row settings-list-row" data-list-id="${escapeHtml(l.id)}">
+          <input type="text" class="list-name-input" value="${escapeHtml(l.title || l.name || l.id)}" placeholder="List Title"/>
+          <span class="list-id-badge"><code>${escapeHtml(l.id)}</code></span>
+          <label class="wip-limit-label">
+            WIP Limit:
+            <input type="number" class="list-wip-input" min="0" value="${l.wipLimit || 0}" placeholder="No limit"/>
+          </label>
+        </div>`).join('');
+
+      return `
+        <div class="settings-tab-lists">
+          <h4>Lists & WIP Limits</h4>
+          <p class="section-desc">Configure column titles and Work-In-Progress (WIP) limits. (0 = no limit)</p>
+          <div class="lists-config-container">${rows || '<p>No lists configured.</p>'}</div>
+          <button id="btn-save-lists-config" class="btn-primary">Save Lists & WIP Limits</button>
         </div>`;
     } else if (this.activeTab === 'projects') {
       const projects = Array.from(this.appState.db.projects.values());
