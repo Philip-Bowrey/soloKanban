@@ -12,11 +12,19 @@
 # Error details
 
 ```
-Test timeout of 30000ms exceeded.
-```
+Error: expect(locator).toHaveCount(expected) failed
 
-```
-Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+Locator:  locator('.kanban-card-wrapper')
+Expected: 1
+Received: 0
+Timeout:  8000ms
+
+Call log:
+  - Expect "toHaveCount" with timeout 8000ms
+  - waiting for locator('.kanban-card-wrapper')
+    20 × locator resolved to 0 elements
+       - unexpected value "0"
+
 ```
 
 # Page snapshot
@@ -29,214 +37,184 @@ Error: page.waitForFunction: Test timeout of 30000ms exceeded.
         - generic [ref=e5]: ⚡
         - heading "SoloKanban" [level=1] [ref=e6]
       - navigation [ref=e7]:
-        - generic [ref=e8]: Workspace Board
-    - generic [ref=e9]:
-      - generic [ref=e10]:
-        - generic [ref=e11]: 🔍
-        - textbox "Filter cards (Title, Body, ID)..." [ref=e12]
-      - combobox "Group board by swimlanes" [ref=e14] [cursor=pointer]:
+        - strong [ref=e9]: Workspace Board
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: 🔍
+        - textbox "Filter cards (Title, Body, ID)..." [ref=e13]
+      - combobox "Group board by swimlanes" [ref=e15] [cursor=pointer]:
         - 'option "Swimlanes: Off" [selected]'
         - option "By Assignee"
         - option "By Priority"
         - option "By Type"
-      - generic [ref=e15]:
-        - button "＋ New Card" [ref=e16] [cursor=pointer]
-        - button "📁 Open Folder" [active] [ref=e17] [cursor=pointer]
-        - button "⚙" [ref=e18] [cursor=pointer]
-  - main [ref=e19]:
-    - generic [ref=e20]:
-      - generic [ref=e21]: 📁
-      - heading "Welcome to SoloKanban" [level=2] [ref=e22]
-      - paragraph [ref=e23]: Select a local workspace folder to start managing project & feature cards with local-first file system access.
-      - button "Choose Local Workspace Folder..." [ref=e24] [cursor=pointer]
+      - generic [ref=e16]:
+        - button "＋ New Card" [ref=e17] [cursor=pointer]
+        - button "📁 Open Folder" [active] [ref=e18] [cursor=pointer]
+        - button "⚙" [ref=e19] [cursor=pointer]
+  - generic [ref=e21]:
+    - generic [ref=e22]: SoloKanban works best in Chromium. You are using a supported browser.
+    - button "×" [ref=e23] [cursor=pointer]
+  - main [ref=e24]
 ```
 
 # Test source
 
 ```ts
-  64  |           this.kind = 'directory';
-  65  |           this.name = name;
-  66  |           // store is a Map<string, MockFileHandle | MockDirectoryHandle>
-  67  |           this._store = store || new Map();
-  68  |         }
-  69  | 
-  70  |         async getFileHandle(name, { create = false } = {}) {
-  71  |           if (this._store.has(name)) {
-  72  |             const entry = this._store.get(name);
-  73  |             if (entry.kind !== 'file') throw new DOMException('TypeMismatch', 'TypeMismatchError');
-  74  |             return entry;
-  75  |           }
-  76  |           if (create) {
-  77  |             const h = new MockFileHandle(name);
-  78  |             this._store.set(name, h);
-  79  |             return h;
-  80  |           }
-  81  |           const err = new DOMException('Not found', 'NotFoundError');
-  82  |           err.code = 8;
-  83  |           throw err;
-  84  |         }
-  85  | 
-  86  |         async getDirectoryHandle(name, { create = false } = {}) {
-  87  |           if (this._store.has(name)) {
-  88  |             const entry = this._store.get(name);
-  89  |             if (entry.kind !== 'directory') throw new DOMException('TypeMismatch', 'TypeMismatchError');
-  90  |             return entry;
-  91  |           }
-  92  |           if (create) {
-  93  |             const h = new MockDirectoryHandle(name);
-  94  |             this._store.set(name, h);
-  95  |             return h;
-  96  |           }
-  97  |           const err = new DOMException('Not found', 'NotFoundError');
-  98  |           err.code = 8;
-  99  |           throw err;
-  100 |         }
-  101 | 
-  102 |         async removeEntry(name, { recursive = false } = {}) {
-  103 |           this._store.delete(name);
-  104 |         }
-  105 | 
-  106 |         async *entries() {
-  107 |           for (const [name, handle] of this._store.entries()) {
-  108 |             yield [name, handle];
-  109 |           }
-  110 |         }
-  111 | 
-  112 |         async *keys() {
-  113 |           for (const name of this._store.keys()) yield name;
-  114 |         }
-  115 |       }
-  116 | 
-  117 |       // Root handle exposed to tests
-  118 |       const rootStore = new Map();
-  119 |       window.__mockRootHandle = new MockDirectoryHandle('root', rootStore);
-  120 | 
-  121 |       // Pre-seed helper used by fixture helpers
-  122 |       window.__seedFile = function (path, content) {
-  123 |         const parts = path.split('/').filter(Boolean);
-  124 |         let current = rootStore;
-  125 |         for (let i = 0; i < parts.length - 1; i++) {
-  126 |           if (!current.has(parts[i])) {
-  127 |             const dir = new MockDirectoryHandle(parts[i]);
-  128 |             current.set(parts[i], dir);
-  129 |           }
-  130 |           current = current.get(parts[i])._store;
-  131 |         }
-  132 |         const fileName = parts[parts.length - 1];
-  133 |         current.set(fileName, new MockFileHandle(fileName, content));
-  134 |       };
-  135 | 
-  136 |       // Override the browser's showDirectoryPicker
-  137 |       window.showDirectoryPicker = async () => window.__mockRootHandle;
-  138 |     });
+  1   | /**
+  2   |  * E2E Tests — Area A: Workspace Setup & First Run
+  3   |  * User Stories: US-SETUP-1 through US-SETUP-5
+  4   |  *
+  5   |  * Covers: blank workspace init, returning workspace, first-run banners
+  6   |  * (Chromium vs non-Chromium), per-workspace banner dismissal.
+  7   |  */
+  8   | 
+  9   | import { test, expect } from './fixtures/kanban-fixture.js';
+  10  | 
+  11  | // ─────────────────────────────────────────────────────────────────────────────
+  12  | // US-SETUP-1: Opening a blank folder initializes the workspace
+  13  | // ─────────────────────────────────────────────────────────────────────────────
+  14  | test('US-SETUP-1: blank workspace opens with zero projects and no console errors', async ({ page, kanban }) => {
+  15  |   const errors = [];
+  16  |   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  17  |   page.on('pageerror', err => errors.push(err.message));
+  18  | 
+  19  |   await kanban.openWorkspace();
+  20  | 
+  21  |   // Board renders with no cards
+  22  |   await expect(page.locator('.kanban-board-grid, .kanban-swimlane-container')).toBeVisible();
+  23  |   const cards = page.locator('.kanban-card-wrapper');
+  24  |   await expect(cards).toHaveCount(0);
+  25  | 
+  26  |   // No console errors
+  27  |   expect(errors.filter(e => !e.includes('favicon'))).toHaveLength(0);
+  28  | });
+  29  | 
+  30  | // ─────────────────────────────────────────────────────────────────────────────
+  31  | // US-SETUP-2: Returning workspace loads existing projects
+  32  | // ─────────────────────────────────────────────────────────────────────────────
+  33  | test('US-SETUP-2: reopening a seeded workspace restores existing project card', async ({ page, kanban }) => {
+  34  |   const projectCardContent = [
+  35  |     '---',
+  36  |     'title: My Existing Project',
+  37  |     'projectId: PROJ_0001',
+  38  |     'listId: backlog',
+  39  |     'status: active',
+  40  |     '---',
+  41  |     '## Project Summary',
+  42  |     'Pre-existing content.',
+  43  |   ].join('\n');
+  44  | 
+  45  |   await kanban.openWorkspace({
+  46  |     files: {
+  47  |       'workspace.json': JSON.stringify({
+  48  |         id: 'ws',
+  49  |         featureOrder: { backlog: ['PROJ-0001'] },
+  50  |       }),
+  51  |       'projects/PROJ-0001.md': projectCardContent,
+  52  |     },
+  53  |   });
+  54  | 
+  55  |   // Existing project card is visible
+> 56  |   await expect(page.locator('.kanban-card-wrapper')).toHaveCount(1);
+      |                                                      ^ Error: expect(locator).toHaveCount(expected) failed
+  57  |   await expect(page.locator('.kanban-card-wrapper')).toContainText('My Existing Project');
+  58  | });
+  59  | 
+  60  | // ─────────────────────────────────────────────────────────────────────────────
+  61  | // US-SETUP-3: Chromium users see the affirming banner exactly once
+  62  | // ─────────────────────────────────────────────────────────────────────────────
+  63  | test('US-SETUP-3: first-run banner appears in Chromium and is dismissable', async ({ page, kanban }) => {
+  64  |   await kanban.openWorkspace();
+  65  | 
+  66  |   const banner = page.locator('.first-run-banner');
+  67  |   await expect(banner).toBeVisible();
+  68  | 
+  69  |   // Banner text should be the affirming copy (not the warning copy)
+  70  |   await expect(banner).toContainText('works best in Chromium');
+  71  | 
+  72  |   // Dismiss the banner
+  73  |   await page.click('#dismiss-banner-btn');
+  74  |   await expect(banner).toBeHidden();
+  75  | });
+  76  | 
+  77  | test('US-SETUP-3b: banner does not reappear after dismissal on reload (same mock FS)', async ({ page, kanban }) => {
+  78  |   await kanban.openWorkspace();
+  79  |   await page.click('#dismiss-banner-btn');
+  80  | 
+  81  |   // Re-open the workspace on the same page (simulate re-selecting folder)
+  82  |   await page.click('#open-folder-btn');
+  83  |   await page.waitForFunction(() => !document.querySelector('.empty-workspace-prompt'), { timeout: 6000 });
+  84  | 
+  85  |   // Banner should not reappear
+  86  |   await expect(page.locator('.first-run-banner')).toBeHidden();
+  87  | });
+  88  | 
+  89  | // ─────────────────────────────────────────────────────────────────────────────
+  90  | // US-SETUP-4: Non-Chromium users see the warning banner
+  91  | // Note: We simulate this by overriding navigator.userAgent in the page context.
+  92  | // ─────────────────────────────────────────────────────────────────────────────
+  93  | test('US-SETUP-4: non-Chromium user sees stronger warning banner with manual editing note', async ({ browser }) => {
+  94  |   // Create a context with a Firefox-like UA
+  95  |   const context = await browser.newContext({
+  96  |     userAgent: 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0',
+  97  |   });
+  98  |   const page = await context.newPage();
+  99  | 
+  100 |   // Override the isChromiumBrowser() detection before any script runs
+  101 |   await page.addInitScript(() => {
+  102 |     // Stub userAgentData to remove Chromium brand
+  103 |     Object.defineProperty(navigator, 'userAgentData', { value: null, configurable: true });
+  104 | 
+  105 |     // Mock FS shim (minimal, same as fixture)
+  106 |     window.showDirectoryPicker = async () => {
+  107 |       class MockDir {
+  108 |         constructor() { this.kind = 'directory'; this.name = 'root'; this._store = new Map(); }
+  109 |         async getFileHandle(n, { create = false } = {}) {
+  110 |           if (!this._store.has(n)) {
+  111 |             if (!create) { const e = new DOMException('NotFound', 'NotFoundError'); e.code = 8; throw e; }
+  112 |             const fh = { kind: 'file', name: n, _content: '', async getFile() { return { text: async () => this._content, name: n }; }, async createWritable() { const s = this; let b = ''; return { async write(c) { b += c; }, async close() { s._content = b; } }; } };
+  113 |             this._store.set(n, fh); return fh;
+  114 |           }
+  115 |           return this._store.get(n);
+  116 |         }
+  117 |         async getDirectoryHandle(n, { create = false } = {}) {
+  118 |           if (!this._store.has(n)) {
+  119 |             if (!create) { const e = new DOMException('NotFound', 'NotFoundError'); e.code = 8; throw e; }
+  120 |             const d = new MockDir(); d.name = n; this._store.set(n, d); return d;
+  121 |           }
+  122 |           return this._store.get(n);
+  123 |         }
+  124 |         async removeEntry() {}
+  125 |         async *entries() { for (const [k, v] of this._store.entries()) yield [k, v]; }
+  126 |       }
+  127 |       return new MockDir();
+  128 |     };
+  129 |   });
+  130 | 
+  131 |   await page.goto('/');
+  132 |   await page.click('#open-folder-btn');
+  133 |   await page.waitForFunction(() => !document.querySelector('.empty-workspace-prompt'), { timeout: 8000 });
+  134 | 
+  135 |   const banner = page.locator('.first-run-banner.banner-warning');
+  136 |   await expect(banner).toBeVisible();
+  137 |   await expect(banner).toContainText('Chromium-based browser');
+  138 |   await expect(banner).toContainText('VS Code');
   139 | 
-  140 |     await page.goto('/');
-  141 | 
-  142 |     // Helper methods exposed to tests
-  143 |     const kanban = {
-  144 |       page,
-  145 | 
-  146 |       /**
-  147 |        * Seeds initial files and triggers workspace open.
-  148 |        * @param {Object} opts
-  149 |        * @param {Record<string,string>} [opts.files] - path -> content map to pre-seed
-  150 |        */
-  151 |       async openWorkspace(opts = {}) {
-  152 |         const files = opts.files || {};
-  153 |         // Seed files into the virtual FS before triggering the picker
-  154 |         for (const [path, content] of Object.entries(files)) {
-  155 |           await page.evaluate(({ path, content }) => {
-  156 |             window.__seedFile(path, content);
-  157 |           }, { path, content });
-  158 |         }
-  159 | 
-  160 |         // Click the "Open Folder" button — this calls showDirectoryPicker (mocked)
-  161 |         await page.click('#open-folder-btn');
-  162 | 
-  163 |         // Wait for the board to render (empty workspace shows kanban-board-grid, or prompt disappears)
-> 164 |         await page.waitForFunction(() => !document.querySelector('.empty-workspace-prompt'), { timeout: 8000 });
-      |                    ^ Error: page.waitForFunction: Test timeout of 30000ms exceeded.
-  165 |       },
-  166 | 
-  167 |       /**
-  168 |        * Reads a file from the mock FS for assertions.
-  169 |        */
-  170 |       async readMockFile(path) {
-  171 |         return page.evaluate(async (path) => {
-  172 |           const parts = path.split('/').filter(Boolean);
-  173 |           let current = window.__mockRootHandle;
-  174 |           try {
-  175 |             for (let i = 0; i < parts.length - 1; i++) {
-  176 |               current = await current.getDirectoryHandle(parts[i]);
-  177 |             }
-  178 |             const fh = await current.getFileHandle(parts[parts.length - 1]);
-  179 |             const f = await fh.getFile();
-  180 |             return await f.text();
-  181 |           } catch (e) {
-  182 |             return null;
-  183 |           }
-  184 |         }, path);
-  185 |       },
-  186 | 
-  187 |       /**
-  188 |        * Creates a project via the UI prompt (mocks window.prompt).
-  189 |        */
-  190 |       async createProject(title = 'Test Project', listId = 'backlog') {
-  191 |         await page.evaluate((title) => { window.prompt = () => title; }, title);
-  192 |         await page.click('#create-card-btn');
-  193 |         // Wait for card to appear
-  194 |         await page.waitForSelector('.kanban-card-wrapper', { timeout: 6000 });
-  195 |       },
-  196 | 
-  197 |       /**
-  198 |        * Opens the first visible card on the board.
-  199 |        */
-  200 |       async openFirstCard() {
-  201 |         await page.click('.kanban-card-wrapper');
-  202 |         await page.waitForSelector('#card-modal', { timeout: 5000 });
-  203 |       },
-  204 | 
-  205 |       /**
-  206 |        * Navigates to the project board via the "Open Project Board" button inside the modal.
-  207 |        */
-  208 |       async openProjectBoard() {
-  209 |         await page.click('#modal-open-project-board-btn');
-  210 |         await page.waitForSelector('#nav-back-workspace-btn', { timeout: 5000 });
-  211 |       },
-  212 | 
-  213 |       /**
-  214 |        * Navigates back to the workspace using the breadcrumb.
-  215 |        */
-  216 |       async goBackToWorkspace() {
-  217 |         await page.click('#nav-back-workspace-btn');
-  218 |         await page.waitForFunction(
-  219 |           () => !document.getElementById('nav-back-workspace-btn'),
-  220 |           { timeout: 5000 }
-  221 |         );
-  222 |       },
-  223 | 
-  224 |       /**
-  225 |        * Closes the currently open modal.
-  226 |        */
-  227 |       async closeModal() {
-  228 |         const closeBtn = page.locator('#modal-close-btn, #settings-close-btn');
-  229 |         if (await closeBtn.count() > 0) await closeBtn.first().click();
-  230 |         await page.waitForFunction(() => !document.getElementById('card-modal'), { timeout: 5000 });
-  231 |       },
-  232 | 
-  233 |       /**
-  234 |        * Opens the Settings modal.
-  235 |        */
-  236 |       async openSettings() {
-  237 |         await page.click('#open-settings-btn');
-  238 |         await page.waitForSelector('#settings-modal', { timeout: 5000 });
-  239 |       },
-  240 |     };
-  241 | 
-  242 |     await use(kanban);
-  243 |   },
-  244 | });
-  245 | 
-  246 | export { expect };
-  247 | 
+  140 |   await context.close();
+  141 | });
+  142 | 
+  143 | // ─────────────────────────────────────────────────────────────────────────────
+  144 | // US-SETUP-5: Banner dismissal is per-workspace, not global
+  145 | // (Simulated by noting that preferences are written to the FS; a new FS = new workspace)
+  146 | // ─────────────────────────────────────────────────────────────────────────────
+  147 | test('US-SETUP-5: banner dismissal is scoped to the workspace folder', async ({ page, kanban }) => {
+  148 |   // Open workspace A and dismiss banner
+  149 |   await kanban.openWorkspace();
+  150 |   const banner = page.locator('.first-run-banner');
+  151 |   if (await banner.isVisible()) {
+  152 |     await page.click('#dismiss-banner-btn');
+  153 |     await expect(banner).toBeHidden();
+  154 |   }
+  155 | 
+  156 |   // Simulate opening a second workspace by reloading and injecting a fresh mock FS
 ```

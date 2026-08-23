@@ -78,9 +78,7 @@ export const test = base.extend({
             this._store.set(name, h);
             return h;
           }
-          const err = new DOMException('Not found', 'NotFoundError');
-          err.code = 8;
-          throw err;
+          throw new DOMException('Not found', 'NotFoundError');
         }
 
         async getDirectoryHandle(name, { create = false } = {}) {
@@ -94,9 +92,7 @@ export const test = base.extend({
             this._store.set(name, h);
             return h;
           }
-          const err = new DOMException('Not found', 'NotFoundError');
-          err.code = 8;
-          throw err;
+          throw new DOMException('Not found', 'NotFoundError');
         }
 
         async removeEntry(name, { recursive = false } = {}) {
@@ -137,7 +133,7 @@ export const test = base.extend({
       window.showDirectoryPicker = async () => window.__mockRootHandle;
     });
 
-    await page.goto('/');
+    await page.goto('');
 
     // Helper methods exposed to tests
     const kanban = {

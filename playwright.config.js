@@ -13,6 +13,9 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
+const BASE_URL = process.env.BASE_URL || 'https://philip-bowrey.github.io/soloKanban/';
+const isRemote = BASE_URL.startsWith('https://') || (BASE_URL.startsWith('http://') && !BASE_URL.includes('127.0.0.1') && !BASE_URL.includes('localhost'));
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -26,7 +29,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'http://127.0.0.1:8080',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -41,14 +44,12 @@ export default defineConfig({
     },
   ],
 
-  /**
-   * Start a simple static file server before running tests.
-   * Swap this for 'npm run dev' if you have a dev server.
-   */
-  webServer: {
-    command: 'node serve.js',
-    url: 'http://127.0.0.1:8080',
-    reuseExistingServer: !process.env.CI,
-    timeout: 10_000,
-  },
+  ...(isRemote ? {} : {
+    webServer: {
+      command: 'node serve.js',
+      url: 'http://127.0.0.1:8080',
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+    },
+  }),
 });
