@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoloKanban</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1>SoloKanban</h1>
+            <span id="workspace-name" class="badge">No workspace open</span>
+        </div>
+        <div class="header-right">
+            <button id="open-workspace-btn">Open Workspace</button>
+            <button id="create-card-btn" class="primary" disabled>+ New Card</button>
+        </div>
+    </header>
+
+    <div id="board-container">
+        <div id="board" class="board"></div>
+        <div id="empty-state" class="empty-state">
+            <p>Open a local workspace folder to start.</p>
+            <button id="open-workspace-empty-btn">Choose Folder</button>
+        </div>
+    </div>
+
+    <!-- Card Editor Modal -->
+    <div id="card-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Edit Card</h2>
+                <button class="close-btn" id="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="card-form"></div>
+            </div>
+            <div class="modal-footer">
+                <span id="conflict-warning" class="conflict-warning hidden">⚠️ Conflict detected</span>
+                <button id="save-card-btn" class="primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for attachments (not fully implemented) -->
+    <input type="file" id="file-input" style="display:none">
+
+    <script src="app.js"></script>
+</body>
+</html>
