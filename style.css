@@ -217,20 +217,9 @@ button:disabled {
     color: white;
 }
 
-.priority-high {
-    color: var(--danger);
-    font-weight: 600;
-}
-
-.priority-medium {
-    color: var(--warning);
-    font-weight: 600;
-}
-
-.priority-low {
-    color: var(--success);
-    font-weight: 600;
-}
+.priority-high { color: var(--danger); font-weight: 600; }
+.priority-medium { color: var(--warning); font-weight: 600; }
+.priority-low { color: var(--success); font-weight: 600; }
 
 .progress {
     display: flex;
@@ -262,9 +251,7 @@ button:disabled {
     color: var(--muted);
 }
 
-.hidden {
-    display: none !important;
-}
+.hidden { display: none !important; }
 
 /* Modal */
 .modal {
@@ -289,6 +276,10 @@ button:disabled {
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+.settings-content {
+    max-width: 900px;
 }
 
 .modal-header {
@@ -385,6 +376,7 @@ button:disabled {
     color: var(--muted);
     font-size: 0.8rem;
     vertical-align: middle;
+    position: relative;
 }
 
 .tooltip-text {
@@ -419,6 +411,92 @@ button:disabled {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Checklist */
+.checklist-section {
+    margin-bottom: 16px;
+}
+
+.checklist-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.checklist-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.checklist-progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+.checklist-items {
+    list-style: none;
+    padding-left: 20px;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.checklist-item .expand-btn {
+    cursor: pointer;
+    width: 20px;
+    text-align: center;
+    user-select: none;
+}
+
+.checklist-item .sub-progress {
+    font-size: 0.7rem;
+    color: var(--muted);
+}
+
+.checklist-subitems {
+    list-style: none;
+    padding-left: 20px;
+}
+
+.checklist-add-item {
+    margin-top: 8px;
+}
+
+.checklist-add-item input[type="text"] {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+/* Settings Tabs */
+.settings-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.tab-btn {
+    padding: 8px 12px;
+    border: none;
+    background: #f1f5f9;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: white;
 }
 
 /* Responsive */
