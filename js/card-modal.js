@@ -243,6 +243,34 @@ export class CardModal {
         this.card.body = bodyArea.value;
         this.scheduleAutoSave();
       });
+    } else {
+      modalEl.querySelectorAll('.task-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const taskIdx = parseInt(cb.dataset.taskIndex, 10);
+          if (isNaN(taskIdx)) return;
+
+          let currentIdx = 0;
+          const bodyLines = (this.card.body || '').split('\n');
+          for (let i = 0; i < bodyLines.length; i++) {
+            const m = bodyLines[i].match(/^(\s*[-*]\s*\[)([ xX])(\]\s*.*)$/);
+            if (m) {
+              if (currentIdx === taskIdx) {
+                const newCheck = cb.checked ? 'x' : ' ';
+                bodyLines[i] = `${m[1]}${newCheck}${m[3]}`;
+                break;
+              }
+              currentIdx++;
+            }
+          }
+          this.card.body = bodyLines.join('\n');
+          this.scheduleAutoSave();
+
+          const parentLi = cb.closest('.task-list-item');
+          if (parentLi) {
+            parentLi.classList.toggle('is-checked', cb.checked);
+          }
+        });
+      });
     }
 
     // Label remove buttons

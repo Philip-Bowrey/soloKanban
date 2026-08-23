@@ -925,3 +925,40 @@ body {
   stroke-width: 3.8;
   stroke-linecap: round;
 }
+
+/* Task Checklists */
+.rendered-markdown-box ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.rendered-markdown-box li {
+  margin: 4px 0;
+}
+
+.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  list-style-type: none !important;
+  margin: 6px 0 !important;
+  line-height: 1.5;
+}
+
+.task-checkbox {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: var(--accent-indigo);
+  flex-shrink: 0;
+}
+
+.task-label {
+  flex: 1;
+}
+
+.task-list-item.is-checked .task-label {
+  text-decoration: line-through;
+  opacity: 0.65;
+}

@@ -76,12 +76,22 @@ describe('Tier 1 — Unit Tests', () => {
     });
   });
 
-  describe('Markdown Security Escaping', () => {
+  describe('Markdown Security Escaping & Task Checkboxes', () => {
     it('escapes raw HTML tags to prevent XSS', () => {
       const text = "Dangerous <script>alert('xss')</script> tag";
       const rendered = renderMarkdown(text);
       assert.ok(!rendered.includes('<script>'));
       assert.ok(rendered.includes('&lt;script&gt;'));
+    });
+
+    it('renders task list items with checkboxes', () => {
+      const md = "## Tasks\n- [ ] Unchecked Task\n- [x] Completed Task";
+      const rendered = renderMarkdown(md);
+      assert.ok(rendered.includes('type="checkbox"'));
+      assert.ok(rendered.includes('task-checkbox'));
+      assert.ok(rendered.includes('checked'));
+      assert.ok(rendered.includes('Unchecked Task'));
+      assert.ok(rendered.includes('Completed Task'));
     });
   });
 

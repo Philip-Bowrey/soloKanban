@@ -29,18 +29,35 @@ export function renderMarkdown(mdText, sectionDescriptions = {}) {
   const lines = mdText.split('\n');
   const htmlLines = [];
   let inList = false;
+  let taskIndex = 0;
 
   for (let line of lines) {
     const trimmed = line.trim();
 
-    // Check lists
-    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+    // Check lists & task checkboxes: e.g. "- [ ] item", "- [x] item", "* [ ] item", "- regular item"
+    const listMatch = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+    if (listMatch) {
+      const indentSpaces = listMatch[1].length;
+      const indentDepth = Math.floor(indentSpaces / 2);
+      const rest = listMatch[3];
+
       if (!inList) {
         htmlLines.push('<ul>');
         inList = true;
       }
-      const itemContent = renderInline(trimmed.substring(2));
-      htmlLines.push(`<li>${itemContent}</li>`);
+
+      // Check if this list item is a task checkbox: [ ] or [x] or [X]
+      const taskMatch = rest.match(/^\[([ xX])\](?:\s+(.*))?$/);
+      if (taskMatch) {
+        const isChecked = taskMatch[1].toLowerCase() === 'x';
+        const itemContent = renderInline(taskMatch[2] || '');
+        const indentStyle = indentDepth > 0 ? ` style="margin-left: ${indentDepth * 20}px;"` : '';
+        htmlLines.push(`<li class="task-list-item${isChecked ? ' is-checked' : ''}"${indentStyle}><input type="checkbox" class="task-checkbox" data-task-index="${taskIndex++}" ${isChecked ? 'checked' : ''}> <span class="task-label">${itemContent}</span></li>`);
+      } else {
+        const itemContent = renderInline(rest);
+        const indentStyle = indentDepth > 0 ? ` style="margin-left: ${indentDepth * 20}px;"` : '';
+        htmlLines.push(`<li${indentStyle}>${itemContent}</li>`);
+      }
       continue;
     } else if (inList) {
       htmlLines.push('</ul>');
