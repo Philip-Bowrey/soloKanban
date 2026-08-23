@@ -174,14 +174,9 @@ export class SoloKanbanApp {
         const card = this.db.cards.get(cardId);
         if (!card) return;
 
-        if (card.type === 'project' && this.state.currentView === 'workspace') {
-          this.state.currentView = 'project';
-          this.state.currentProjectId = card.frontmatter.projectId || card.id;
-          this.renderHeader();
-          this.refreshBoard();
-        } else {
-          this.cardModal.open(card);
-        }
+        // Per PRD §8.1: Clicking a project card opens its edit modal.
+        // Inside the modal is a button to navigate to the project board.
+        this.cardModal.open(card);
       });
     });
   }

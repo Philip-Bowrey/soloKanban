@@ -119,6 +119,12 @@ export class CardModal {
             </div>
 
             <div class="modal-sidebar-column">
+              ${this.card.type === 'project' ? `
+                <div class="sidebar-section highlight-box">
+                  <h4>Project Navigation</h4>
+                  <button id="modal-open-project-board-btn" class="btn-gradient btn-block">🚀 Open Project Board</button>
+                </div>` : ''}
+
               <div class="sidebar-section">
                 <h4>Labels</h4>
                 <div class="modal-labels-list">${labelItemsHtml}</div>
@@ -207,6 +213,20 @@ export class CardModal {
           }
           this.scheduleAutoSave();
           this.renderModalContainer();
+        }
+      });
+    }
+
+    const openProjBtn = modalEl.querySelector('#modal-open-project-board-btn');
+    if (openProjBtn) {
+      openProjBtn.addEventListener('click', () => {
+        const projId = this.card.frontmatter?.projectId || this.card.id;
+        this.close();
+        if (typeof window !== 'undefined' && window.app) {
+          window.app.state.currentView = 'project';
+          window.app.state.currentProjectId = projId;
+          window.app.renderHeader();
+          window.app.refreshBoard();
         }
       });
     }
