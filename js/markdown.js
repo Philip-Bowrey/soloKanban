@@ -46,8 +46,8 @@ export function renderMarkdown(mdText, sectionDescriptions = {}) {
         inList = true;
       }
 
-      // Check if this list item is a task checkbox: [ ] or [x] or [X]
-      const taskMatch = rest.match(/^\[([ xX])\](?:\s+(.*))?$/);
+      // Check if this list item is a task checkbox: [ ] or [] or [x] or [X]
+      const taskMatch = rest.match(/^\[([ xX]?)\](?:\s*(.*))?$/);
       if (taskMatch) {
         const isChecked = taskMatch[1].toLowerCase() === 'x';
         const itemContent = renderInline(taskMatch[2] || '');

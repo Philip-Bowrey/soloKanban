@@ -110,14 +110,14 @@ export class CardModal {
         }).join('');
         return `
           <div class="form-group">
-            <label>${escapeHtml(field.label)}</label>
-            <select class="custom-field-input" data-field-key="${field.key}">${optionsHtml}</select>
+            <label class="form-label">${escapeHtml(field.label)}</label>
+            <select class="form-select custom-field-input" data-field-key="${field.key}">${optionsHtml}</select>
           </div>`;
       } else {
         return `
           <div class="form-group">
-            <label>${escapeHtml(field.label)}</label>
-            <input type="text" class="custom-field-input" data-field-key="${field.key}" value="${escapeHtml(String(val))}"/>
+            <label class="form-label">${escapeHtml(field.label)}</label>
+            <input type="text" class="form-input custom-field-input" data-field-key="${field.key}" value="${escapeHtml(String(val))}"/>
           </div>`;
       }
     }).join('');

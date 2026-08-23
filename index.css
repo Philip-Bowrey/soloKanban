@@ -862,7 +862,20 @@ body {
   font-weight: 500;
 }
 
-.form-select, .form-group input {
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.form-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-select, .form-input, .form-group input, .form-group select {
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-md);
@@ -870,6 +883,48 @@ body {
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   font-size: 0.85rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.form-select:focus, .form-input:focus, .form-group input:focus, .form-group select:focus {
+  border-color: var(--accent-indigo);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.rendered-markdown-box h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 20px 0 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+}
+
+.rendered-markdown-box h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 18px 0 6px 0;
+}
+
+.rendered-markdown-box h2:first-child,
+.rendered-markdown-box h1:first-child {
+  margin-top: 0;
+}
+
+.rendered-markdown-box h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 14px 0 4px 0;
+}
+
+.rendered-markdown-box p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 4px 0 10px 0;
 }
 
 .modal-label-badge {
