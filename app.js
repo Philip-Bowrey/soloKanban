@@ -1,6 +1,3 @@
-Here is the full `app.js` for SoloKanban v6.2, implementing all specified features including settings, rich checklists with sub-items, auto-save, and project deletion.
-
-```javascript
 // ==================== SoloKanban v6.2 ====================
 // Static web app for local-first dual-level Kanban with auto-save, settings, rich checklists.
 
@@ -1963,4 +1960,3 @@ async function openWorkspace() {
         console.log('No saved workspace handle or permission denied.');
     }
 })();
-```
