@@ -1,5 +1,5 @@
-// ==================== SoloKanban v6.0 ====================
-// Static web app for local-first dual-level Kanban.
+// ==================== SoloKanban v6.1 ====================
+// Static web app for local-first dual-level Kanban with auto-save UX.
 
 // ---------- Global State ----------
 let workspaceHandle = null;
@@ -10,9 +10,11 @@ let customFields = {};         // id -> definition
 let currentBoard = 'workspace'; // 'workspace' or projectId
 let currentProject = null;     // project object when in project board
 let projectHandle = null;      // directory handle for current project
-let currentCard = null;        // card being edited
+let currentCard = null;        // card being edited (existing)
 let editingNew = false;        // true when creating new card
 let sdkVersionData = null;     // version.json content
+let saveTimeout = null;        // debounce timer for auto-save
+let isDragging = false;        // flag to suppress click after drag
 
 // ---------- IndexedDB ----------
 const dbName = 'solokanban-db';
@@ -208,7 +210,6 @@ async function ensureDirectory(dirHandle, path) {
 
 // ---------- Workspace Initialization ----------
 async function initializeWorkspaceStructure(handle) {
-    // Root files
     await getFileHandle(handle, 'workspace.json', true);
     const solokanbanDir = await ensureDirectory(handle, '.solokanban');
     await solokanbanDir.getFileHandle('fields.json', { create: true });
@@ -295,6 +296,7 @@ function defaultLists() {
 }
 
 function getDefaultFeatureTypes() {
+    // Full definitions with descriptions for tooltips
     return {
         'agent-capability': {
             id: 'agent-capability', name: 'Agent Capability', color: '#3b82f6',
@@ -305,11 +307,11 @@ function getDefaultFeatureTypes() {
                 { key: 'repoUrl', label: 'Repository URL', type: 'url' }
             ],
             bodySections: [
-                { id: 'current-behavior', label: 'Current Behavior', type: 'markdown', required: true },
-                { id: 'desired-behavior', label: 'Desired Behavior', type: 'markdown', required: true },
-                { id: 'validation', label: 'Validation', type: 'checklist' },
-                { id: 'agent-brief', label: 'Agent Brief', type: 'markdown' },
-                { id: 'outcome', label: 'Outcome', type: 'markdown' }
+                { id: 'current-behavior', label: 'Current Behavior', type: 'markdown', required: true, description: 'Describe the current behaviour of the agent or system.' },
+                { id: 'desired-behavior', label: 'Desired Behavior', type: 'markdown', required: true, description: 'Describe the desired behaviour after the improvement.' },
+                { id: 'validation', label: 'Validation', type: 'checklist', description: 'List the steps or criteria that must be met to consider this done.' },
+                { id: 'agent-brief', label: 'Agent Brief', type: 'markdown', description: 'Instructions for an AI agent implementing this improvement.' },
+                { id: 'outcome', label: 'Outcome', type: 'markdown', description: 'Record the final result or observations after implementation.' }
             ]
         },
         'bug-fix': {
@@ -320,9 +322,9 @@ function getDefaultFeatureTypes() {
                 { key: 'repoUrl', label: 'Repository URL', type: 'url' }
             ],
             bodySections: [
-                { id: 'steps-to-reproduce', label: 'Steps to Reproduce', type: 'markdown', required: true },
-                { id: 'expected-vs-actual', label: 'Expected vs Actual', type: 'markdown', required: true },
-                { id: 'fix-validation', label: 'Fix Validation', type: 'checklist' }
+                { id: 'steps-to-reproduce', label: 'Steps to Reproduce', type: 'markdown', required: true, description: 'List the steps needed to reproduce the bug.' },
+                { id: 'expected-vs-actual', label: 'Expected vs Actual', type: 'markdown', required: true, description: 'What should happen vs what actually happens.' },
+                { id: 'fix-validation', label: 'Fix Validation', type: 'checklist', description: 'Checklist of conditions to verify the fix.' }
             ]
         },
         'process-change': {
@@ -333,11 +335,11 @@ function getDefaultFeatureTypes() {
                 { key: 'relatedDocs', label: 'Related Documentation', type: 'text' }
             ],
             bodySections: [
-                { id: 'current-process', label: 'Current Process', type: 'markdown', required: true },
-                { id: 'proposed-process', label: 'Proposed Process', type: 'markdown', required: true },
-                { id: 'rationale', label: 'Rationale', type: 'markdown' },
-                { id: 'rollout-plan', label: 'Rollout Plan', type: 'checklist' },
-                { id: 'outcome', label: 'Outcome', type: 'markdown' }
+                { id: 'current-process', label: 'Current Process', type: 'markdown', required: true, description: 'Describe the existing workflow or process.' },
+                { id: 'proposed-process', label: 'Proposed Process', type: 'markdown', required: true, description: 'Describe the new workflow or process.' },
+                { id: 'rationale', label: 'Rationale', type: 'markdown', description: 'Why this change is needed.' },
+                { id: 'rollout-plan', label: 'Rollout Plan', type: 'checklist', description: 'Steps to roll out the change.' },
+                { id: 'outcome', label: 'Outcome', type: 'markdown', description: 'Result after implementation.' }
             ]
         },
         'tooling-change': {
@@ -348,11 +350,11 @@ function getDefaultFeatureTypes() {
                 { key: 'impact', label: 'Impact', type: 'select', options: ['high','medium','low'], default: 'medium' }
             ],
             bodySections: [
-                { id: 'current-tooling', label: 'Current Tooling', type: 'markdown', required: true },
-                { id: 'desired-tooling', label: 'Desired Tooling', type: 'markdown', required: true },
-                { id: 'api-changes', label: 'API / Integration Changes', type: 'markdown' },
-                { id: 'validation', label: 'Validation', type: 'checklist' },
-                { id: 'migration-notes', label: 'Migration Notes', type: 'markdown' }
+                { id: 'current-tooling', label: 'Current Tooling', type: 'markdown', required: true, description: 'Current tool setup or API usage.' },
+                { id: 'desired-tooling', label: 'Desired Tooling', type: 'markdown', required: true, description: 'What the new tooling should look like.' },
+                { id: 'api-changes', label: 'API / Integration Changes', type: 'markdown', description: 'Specific API or integration modifications.' },
+                { id: 'validation', label: 'Validation', type: 'checklist', description: 'How to verify the change.' },
+                { id: 'migration-notes', label: 'Migration Notes', type: 'markdown', description: 'Notes on migrating existing usage.' }
             ]
         },
         'documentation-update': {
@@ -363,10 +365,10 @@ function getDefaultFeatureTypes() {
                 { key: 'repoUrl', label: 'Repository URL', type: 'url' }
             ],
             bodySections: [
-                { id: 'current-docs', label: 'Current Documentation', type: 'markdown' },
-                { id: 'needed-changes', label: 'Needed Changes', type: 'markdown', required: true },
-                { id: 'review-checklist', label: 'Review Checklist', type: 'checklist' },
-                { id: 'outcome', label: 'Outcome', type: 'markdown' }
+                { id: 'current-docs', label: 'Current Documentation', type: 'markdown', description: 'Existing documentation, if any.' },
+                { id: 'needed-changes', label: 'Needed Changes', type: 'markdown', required: true, description: 'What updates or additions are needed.' },
+                { id: 'review-checklist', label: 'Review Checklist', type: 'checklist', description: 'Criteria to ensure the documentation is accurate and complete.' },
+                { id: 'outcome', label: 'Outcome', type: 'markdown', description: 'Final state of the documentation.' }
             ]
         },
         'test-data-generation': {
@@ -378,11 +380,11 @@ function getDefaultFeatureTypes() {
                 { key: 'impact', label: 'Impact', type: 'select', options: ['high','medium','low'], default: 'medium' }
             ],
             bodySections: [
-                { id: 'data-requirements', label: 'Data Requirements', type: 'markdown', required: true },
-                { id: 'generation-approach', label: 'Generation Approach', type: 'markdown' },
-                { id: 'validation', label: 'Validation', type: 'checklist' },
-                { id: 'output-location', label: 'Output Location', type: 'markdown' },
-                { id: 'outcome', label: 'Outcome', type: 'markdown' }
+                { id: 'data-requirements', label: 'Data Requirements', type: 'markdown', required: true, description: 'What data is needed, format, and constraints.' },
+                { id: 'generation-approach', label: 'Generation Approach', type: 'markdown', description: 'How the data will be generated.' },
+                { id: 'validation', label: 'Validation', type: 'checklist', description: 'Checks to ensure the data is correct.' },
+                { id: 'output-location', label: 'Output Location', type: 'markdown', description: 'Where the generated data should be stored.' },
+                { id: 'outcome', label: 'Outcome', type: 'markdown', description: 'Result after generation.' }
             ]
         },
         'project': {
@@ -395,11 +397,11 @@ function getDefaultFeatureTypes() {
                 { key: 'projectId', label: 'Project ID', type: 'text', required: true }
             ],
             bodySections: [
-                { id: 'description', label: 'Description', type: 'markdown', required: true },
-                { id: 'user-value', label: 'User Value', type: 'markdown' },
-                { id: 'acceptance-criteria', label: 'Acceptance Criteria', type: 'checklist' },
-                { id: 'out-of-scope', label: 'Out of Scope', type: 'markdown' },
-                { id: 'dependencies', label: 'Dependencies', type: 'markdown' }
+                { id: 'description', label: 'Description', type: 'markdown', required: true, description: 'Brief summary of the project’s goals.' },
+                { id: 'user-value', label: 'User Value', type: 'markdown', description: 'Benefit for the user or business.' },
+                { id: 'acceptance-criteria', label: 'Acceptance Criteria', type: 'checklist', description: 'High-level rules to show when the project is done.' },
+                { id: 'out-of-scope', label: 'Out of Scope', type: 'markdown', description: 'What this project will not do.' },
+                { id: 'dependencies', label: 'Dependencies', type: 'markdown', description: 'Other tasks or systems needed before starting.' }
             ]
         }
     };
@@ -469,94 +471,6 @@ async function renderBoard() {
     breadcrumbs.innerHTML = '';
 
     if (currentBoard === 'workspace') {
-        // Workspace board: show project cards from /projects/
-        breadcrumbs.innerHTML = `<span>Workspace</span>`;
-        const lists = workspaceData.workspaceLists || defaultLists();
-        const order = workspaceData.workspaceFeatureOrder || {};
-
-        // Ensure order object has all lists
-        lists.forEach(list => {
-            if (!order[list.id]) order[list.id] = [];
-        });
-
-        for (const list of lists) {
-            const columnEl = createColumnElement(list, order[list.id] || [], 'project');
-            boardEl.appendChild(columnEl);
-        }
-    } else {
-        // Project board
-        const project = workspaceData.projects.find(p => p.id === currentBoard);
-        if (!project) {
-            alert('Project not found');
-            currentBoard = 'workspace';
-            return renderBoard();
-        }
-        currentProject = project;
-        projectHandle = await ensureDirectory(workspaceHandle, project.id);
-        breadcrumbs.innerHTML = `<a id="back-to-workspace">Workspace</a> / <span>${project.name}</span>`;
-        document.getElementById('back-to-workspace').addEventListener('click', () => {
-            currentBoard = 'workspace';
-            currentProject = null;
-            projectHandle = null;
-            renderBoard();
-        });
-
-        let projectData;
-        try {
-            const projFile = await projectHandle.getFileHandle('project.json');
-            projectData = JSON.parse(await readFile(projFile));
-        } catch (e) {
-            // Initialize if missing
-            projectData = {
-                id: project.id,
-                lists: defaultLists(),
-                featureOrder: {}
-            };
-            projectData.lists.forEach(list => projectData.featureOrder[list.id] = []);
-            await writeFile(await projectHandle.getFileHandle('project.json', { create: true }), JSON.stringify(projectData, null, 2));
-        }
-
-        for (const list of projectData.lists) {
-            const columnEl = createColumnElement(list, projectData.featureOrder[list.id] || [], 'feature');
-            boardEl.appendChild(columnEl);
-        }
-    }
-
-    setupDragAndDrop();
-}
-
-function createColumnElement(list, cardIds, cardType) {
-    const columnEl = document.createElement('div');
-    columnEl.className = 'column';
-    columnEl.dataset.listId = list.id;
-
-    const header = document.createElement('div');
-    header.className = 'column-header';
-    header.innerHTML = `<span>${list.name}</span><span class="card-count">0</span>`;
-    columnEl.appendChild(header);
-
-    const cardsContainer = document.createElement('div');
-    cardsContainer.className = 'column-cards';
-    cardsContainer.dataset.listId = list.id;
-    columnEl.appendChild(cardsContainer);
-
-    let count = 0;
-    cardIds.forEach(cardId => {
-        // Load and render card asynchronously? For simplicity, we'll do it synchronously using async/await in caller.
-        // But here we can't await in forEach; we'll need to restructure.
-        // We'll handle in renderBoard by awaiting loadCardForDisplay.
-    });
-    return columnEl;
-}
-
-// We'll need to adjust renderBoard to populate cards with async loading.
-async function renderBoard() {
-    const boardEl = document.getElementById('board');
-    boardEl.innerHTML = '';
-    const breadcrumbs = document.getElementById('breadcrumbs');
-    breadcrumbs.innerHTML = '';
-
-    if (currentBoard === 'workspace') {
         breadcrumbs.innerHTML = `<span>Workspace</span>`;
         const lists = workspaceData.workspaceLists || defaultLists();
         const order = workspaceData.workspaceFeatureOrder || {};
@@ -614,6 +528,7 @@ async function renderBoard() {
     }
 
     setupDragAndDrop();
+    setupBoardClickDelegation();
 }
 
 function createColumnElementShell(list) {
@@ -717,7 +632,7 @@ function createCardElement(cardData, cardType) {
     metaContainer.className = 'card-meta';
 
     // Due date
-    if (fm.dueDate) {
+    if (fm.dueDate && !isNaN(new Date(fm.dueDate).getTime())) {
         const dueDateEl = document.createElement('span');
         dueDateEl.className = 'due-date';
         const due = new Date(fm.dueDate + 'T00:00:00');
@@ -736,7 +651,7 @@ function createCardElement(cardData, cardType) {
 
     // Priority / Severity
     const priorityField = fm.priority || fm.severity;
-    if (priorityField) {
+    if (priorityField && typeof priorityField === 'string') {
         const priorityEl = document.createElement('span');
         priorityEl.className = `priority-${priorityField.toLowerCase()}`;
         priorityEl.textContent = priorityField;
@@ -746,7 +661,7 @@ function createCardElement(cardData, cardType) {
     // Custom fields cardVisible
     for (const fieldId in customFields) {
         const field = customFields[fieldId];
-        if (field.cardVisible && fm[field.id] !== undefined) {
+        if (field.cardVisible && fm[field.id] !== undefined && fm[field.id] !== null && fm[field.id] !== '') {
             const fieldEl = document.createElement('span');
             fieldEl.textContent = `${field.name}: ${fm[field.id]}`;
             metaContainer.appendChild(fieldEl);
@@ -765,13 +680,11 @@ function createCardElement(cardData, cardType) {
             const checklistContent = getSectionContent(cardData.body, firstChecklist.label);
             const total = countChecklistItems(checklistContent);
             const done = countCheckedItems(checklistContent);
-            progressText = `${done}/${total}`;
+            if (total > 0) progressText = `${done}/${total}`;
         }
     } else if (cardType === 'project') {
-        // Aggregate from child features: percentage done
-        // This would require loading all features and counting done list membership.
-        // For simplicity, we'll omit or compute lazily. We'll just show placeholder.
-        // In a complete implementation, we'd compute. For now, skip.
+        // For project cards, progress could be aggregated from child features.
+        // This would require loading all features; for simplicity we omit for now.
     }
 
     if (progressText) {
@@ -800,7 +713,6 @@ function createCardElement(cardData, cardType) {
         cardEl.appendChild(deliveredEl);
     }
 
-    cardEl.addEventListener('click', () => openCardModal(cardData.id, cardType));
     return cardEl;
 }
 
@@ -835,6 +747,8 @@ function setupDragAndDrop() {
     const columns = document.querySelectorAll('.column-cards');
 
     cards.forEach(card => {
+        card.addEventListener('mousedown', handleMouseDown);
+        card.addEventListener('mouseup', handleMouseUp);
         card.addEventListener('dragstart', handleDragStart);
         card.addEventListener('dragend', handleDragEnd);
     });
@@ -845,23 +759,48 @@ function setupDragAndDrop() {
     });
 }
 
-let draggedCardInfo = null;
+let dragOccurred = false;
+let mouseDownPos = null;
+
+function handleMouseDown(e) {
+    mouseDownPos = { x: e.clientX, y: e.clientY };
+    dragOccurred = false;
+}
+
+function handleMouseUp(e) {
+    if (mouseDownPos) {
+        const dx = Math.abs(e.clientX - mouseDownPos.x);
+        const dy = Math.abs(e.clientY - mouseDownPos.y);
+        if (dx > 5 || dy > 5) {
+            dragOccurred = true;
+        }
+    }
+    mouseDownPos = null;
+}
 
 function handleDragStart(e) {
+    dragOccurred = true;
     const cardEl = e.target.closest('.card');
+    if (!cardEl) return;
+    cardEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', cardEl.dataset.cardId);
+    // Store source info globally
     draggedCardInfo = {
         cardId: cardEl.dataset.cardId,
         cardType: cardEl.dataset.cardType,
         sourceListId: cardEl.closest('.column-cards').dataset.listId
     };
-    cardEl.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
 }
 
 function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
-    draggedCardInfo = null;
+    const cardEl = e.target.closest('.card');
+    if (cardEl) cardEl.classList.remove('dragging');
+    // Keep dragOccurred true until click event fires to suppress click
+    setTimeout(() => { dragOccurred = false; }, 0);
 }
+
+let draggedCardInfo = null;
 
 function handleDragOver(e) {
     e.preventDefault();
@@ -873,11 +812,11 @@ async function handleDrop(e) {
     const targetListId = e.currentTarget.dataset.listId;
     if (!draggedCardInfo) return;
     await moveCard(draggedCardInfo.cardId, targetListId, draggedCardInfo.cardType);
+    draggedCardInfo = null;
 }
 
 async function moveCard(cardId, targetListId, cardType) {
     if (cardType === 'project') {
-        // Move in workspace order
         const order = workspaceData.workspaceFeatureOrder || {};
         for (const listId in order) {
             order[listId] = order[listId].filter(id => id !== cardId);
@@ -886,7 +825,7 @@ async function moveCard(cardId, targetListId, cardType) {
         order[targetListId].push(cardId);
         workspaceData.workspaceFeatureOrder = order;
         await writeFile(await getFileHandle(workspaceHandle, 'workspace.json', true), JSON.stringify(workspaceData, null, 2));
-        // Update project card frontmatter listId (not strictly needed for workspace board, but for consistency)
+
         const projectsDir = await ensureDirectory(workspaceHandle, 'projects');
         const cardFile = await projectsDir.getFileHandle(`${cardId}.md`);
         const content = await readFile(cardFile);
@@ -897,11 +836,12 @@ async function moveCard(cardId, targetListId, cardType) {
         parsed.frontmatter.meta.updatedAt = new Date().toISOString();
         if (targetListId === 'done') {
             parsed.frontmatter.meta.deliveredAt = new Date().toISOString();
+        } else {
+            delete parsed.frontmatter.meta.deliveredAt;
         }
         const newBody = appendActivityLog(parsed.body, `Moved to ${targetListId}`);
         await writeFile(cardFile, serializeCard(parsed.frontmatter, newBody));
     } else {
-        // Feature card in project board
         const projectData = await loadProjectData(currentBoard);
         const order = projectData.featureOrder || {};
         for (const listId in order) {
@@ -922,6 +862,8 @@ async function moveCard(cardId, targetListId, cardType) {
         parsed.frontmatter.meta.updatedAt = new Date().toISOString();
         if (targetListId === 'done') {
             parsed.frontmatter.meta.deliveredAt = new Date().toISOString();
+        } else {
+            delete parsed.frontmatter.meta.deliveredAt;
         }
         const newBody = appendActivityLog(parsed.body, `Moved to ${targetListId}`);
         await writeFile(cardFile, serializeCard(parsed.frontmatter, newBody));
@@ -960,6 +902,30 @@ function serializeCard(frontmatter, body) {
     return '---\n' + serializeYaml(frontmatter, 0) + '\n---\n' + body;
 }
 
+// ---------- Board Click Delegation ----------
+function setupBoardClickDelegation() {
+    // Remove existing listener to avoid duplicates
+    const board = document.getElementById('board');
+    board.removeEventListener('click', boardClickHandler);
+    board.addEventListener('click', boardClickHandler);
+}
+
+function boardClickHandler(e) {
+    if (dragOccurred) {
+        // Ignore click after drag
+        return;
+    }
+    const cardEl = e.target.closest('.card');
+    if (!cardEl) return;
+    const cardId = cardEl.dataset.cardId;
+    const cardType = cardEl.dataset.cardType;
+    if (cardType === 'project') {
+        openCardModal(cardId, 'project');
+    } else {
+        openCardModal(cardId, 'feature');
+    }
+}
+
 // ---------- Card Modal (Edit / New) ----------
 async function openCardModal(cardId, cardType) {
     editingNew = false;
@@ -990,7 +956,7 @@ function openNewCardModal(cardType) {
 }
 
 function buildNewCardForm(container, cardType) {
-    // Type selector (only for feature cards; project cards fixed type 'project')
+    // Type selector (only for feature cards)
     if (cardType === 'feature') {
         const typeGroup = document.createElement('div');
         typeGroup.className = 'form-group';
@@ -1006,7 +972,6 @@ function buildNewCardForm(container, cardType) {
         typeGroup.appendChild(select);
         container.appendChild(typeGroup);
     } else {
-        // For project card, type is fixed
         const hiddenInput = document.createElement('input');
         hiddenInput.type = 'hidden';
         hiddenInput.id = 'new-card-type';
@@ -1024,7 +989,7 @@ function buildNewCardForm(container, cardType) {
     titleGroup.appendChild(titleInput);
     container.appendChild(titleGroup);
 
-    // For project cards, also need projectId field
+    // For project cards, projectId
     if (cardType === 'project') {
         const projIdGroup = document.createElement('div');
         projIdGroup.className = 'form-group';
@@ -1035,13 +1000,19 @@ function buildNewCardForm(container, cardType) {
         projIdGroup.appendChild(projIdInput);
         container.appendChild(projIdGroup);
     }
+
+    // Create button (auto-save not appropriate for new card)
+    const createBtn = document.createElement('button');
+    createBtn.textContent = 'Create Card';
+    createBtn.className = 'primary';
+    createBtn.addEventListener('click', () => createNewCard(container));
+    container.appendChild(createBtn);
 }
 
 function buildCardForm(container, frontmatter, body, cardType) {
     const typeId = frontmatter.type;
     const typeDef = featureTypes[typeId];
     if (!typeDef) {
-        // Fallback: simple textarea
         const textarea = document.createElement('textarea');
         textarea.value = body;
         textarea.dataset.sectionId = 'body';
@@ -1049,8 +1020,39 @@ function buildCardForm(container, frontmatter, body, cardType) {
         return;
     }
 
-    // Frontmatter fields
+    // Project board link at top for project cards
+    if (cardType === 'project') {
+        const linkContainer = document.createElement('div');
+        linkContainer.style.marginBottom = '16px';
+        const openBoardBtn = document.createElement('button');
+        openBoardBtn.textContent = 'Open Project Board';
+        openBoardBtn.className = 'primary';
+        openBoardBtn.addEventListener('click', () => {
+            closeModal();
+            currentBoard = frontmatter.projectId;
+            currentProject = workspaceData.projects.find(p => p.id === frontmatter.projectId);
+            projectHandle = null;
+            renderBoard();
+        });
+        linkContainer.appendChild(openBoardBtn);
+        container.appendChild(linkContainer);
+    }
+
+    // Title input
+    const titleGroup = document.createElement('div');
+    titleGroup.className = 'form-group';
+    titleGroup.innerHTML = `<label>Title</label>`;
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = frontmatter.title || '';
+    titleInput.dataset.fieldKey = 'title';
+    titleInput.addEventListener('input', debouncedAutoSave);
+    titleGroup.appendChild(titleInput);
+    container.appendChild(titleGroup);
+
+    // Frontmatter fields (excluding title to avoid duplication)
     typeDef.frontmatterFields.forEach(field => {
+        if (field.key === 'title') return;
         const group = document.createElement('div');
         group.className = 'form-group';
         const label = document.createElement('label');
@@ -1066,24 +1068,28 @@ function buildCardForm(container, frontmatter, body, cardType) {
                 if (frontmatter[field.key] === opt) option.selected = true;
                 input.appendChild(option);
             });
+            input.addEventListener('change', debouncedAutoSave);
         } else if (field.type === 'date') {
             input = document.createElement('input');
             input.type = 'date';
             input.value = frontmatter[field.key] || '';
+            input.addEventListener('input', debouncedAutoSave);
         } else if (field.type === 'url') {
             input = document.createElement('input');
             input.type = 'url';
             input.value = frontmatter[field.key] || '';
+            input.addEventListener('input', debouncedAutoSave);
         } else if (field.type === 'multiselect') {
-            // For labels, we'll implement a simple text input for now
             input = document.createElement('input');
             input.type = 'text';
             input.value = (frontmatter[field.key] || []).join(', ');
             input.placeholder = 'Comma-separated label IDs';
+            input.addEventListener('input', debouncedAutoSave);
         } else {
             input = document.createElement('input');
             input.type = 'text';
             input.value = frontmatter[field.key] || '';
+            input.addEventListener('input', debouncedAutoSave);
         }
         input.dataset.fieldKey = field.key;
         group.appendChild(input);
@@ -1093,16 +1099,18 @@ function buildCardForm(container, frontmatter, body, cardType) {
     // Body sections
     const bodySections = parseSections(body);
     typeDef.bodySections.forEach(section => {
-        const heading = document.createElement('div');
-        heading.className = 'section-heading';
-        heading.textContent = section.label;
-        container.appendChild(heading);
+        const headingDiv = document.createElement('div');
+        headingDiv.className = 'section-heading';
+        headingDiv.innerHTML = `${section.label} <span class="tooltip-icon">?<span class="tooltip-text">${section.description || 'No description'}</span></span>`;
+        container.appendChild(headingDiv);
 
         if (section.type === 'markdown') {
-            const textarea = document.createElement('textarea');
-            textarea.dataset.sectionId = section.id;
-            textarea.value = bodySections[section.id] || '';
-            container.appendChild(textarea);
+            const renderedDiv = document.createElement('div');
+            renderedDiv.className = 'markdown-rendered';
+            renderedDiv.innerHTML = renderMarkdown(bodySections[section.id] || '');
+            renderedDiv.dataset.sectionId = section.id;
+            renderedDiv.addEventListener('click', () => startMarkdownEdit(renderedDiv, bodySections[section.id] || '', section.id));
+            container.appendChild(renderedDiv);
         } else if (section.type === 'checklist') {
             const checklistDiv = document.createElement('div');
             checklistDiv.dataset.sectionId = section.id;
@@ -1114,6 +1122,7 @@ function buildCardForm(container, frontmatter, body, cardType) {
                 checkbox.type = 'checkbox';
                 checkbox.checked = item.checked;
                 checkbox.dataset.index = index;
+                checkbox.addEventListener('change', () => autoSaveChecklist(checklistDiv));
                 const span = document.createElement('span');
                 span.textContent = item.text;
                 div.appendChild(checkbox);
@@ -1123,6 +1132,39 @@ function buildCardForm(container, frontmatter, body, cardType) {
             container.appendChild(checklistDiv);
         }
     });
+}
+
+function renderMarkdown(md) {
+    // Minimal Markdown renderer for safe display
+    let html = md
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
+        .replace(/^\s*-\s(.*$)/gim, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>')
+        .replace(/\n/gim, '<br>');
+    return html;
+}
+
+function startMarkdownEdit(renderedDiv, rawMd, sectionId) {
+    const textarea = document.createElement('textarea');
+    textarea.value = rawMd;
+    textarea.dataset.sectionId = sectionId;
+    textarea.style.width = '100%';
+    textarea.style.minHeight = '100px';
+    textarea.addEventListener('blur', () => {
+        const newMd = textarea.value;
+        renderedDiv.innerHTML = renderMarkdown(newMd);
+        renderedDiv.style.display = '';
+        textarea.remove();
+        debouncedAutoSave();
+    });
+    renderedDiv.style.display = 'none';
+    renderedDiv.parentNode.insertBefore(textarea, renderedDiv.nextSibling);
+    textarea.focus();
 }
 
 function parseSections(body) {
@@ -1160,18 +1202,138 @@ function serializeChecklist(items) {
     return items.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`).join('\n');
 }
 
-// ---------- Save Card ----------
-document.getElementById('save-card-btn').addEventListener('click', saveCard);
+// ---------- Auto-Save Functions ----------
+function debouncedAutoSave() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        if (!editingNew && currentCard) {
+            saveExistingCard();
+        }
+    }, 800);
+}
 
-async function saveCard() {
-    const formContainer = document.getElementById('card-form');
-    if (editingNew) {
-        await createNewCard(formContainer);
-    } else {
-        await updateExistingCard(formContainer);
+function autoSaveChecklist(checklistDiv) {
+    // For checklist, save immediately
+    if (!editingNew && currentCard) {
+        saveExistingCard();
     }
 }
 
+async function saveExistingCard() {
+    if (!currentCard) return;
+    const formContainer = document.getElementById('card-form');
+    const frontmatter = { ...currentCard.frontmatter };
+    const typeDef = featureTypes[frontmatter.type];
+
+    // Collect title
+    const titleInput = formContainer.querySelector('input[data-field-key="title"]');
+    if (titleInput) frontmatter.title = titleInput.value;
+
+    // Collect frontmatter fields
+    const inputs = formContainer.querySelectorAll('input[data-field-key], select[data-field-key]');
+    inputs.forEach(input => {
+        const key = input.dataset.fieldKey;
+        if (input.type === 'text' && key === 'labels') {
+            frontmatter[key] = input.value.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (input.type === 'date') {
+            frontmatter[key] = input.value || undefined;
+        } else {
+            frontmatter[key] = input.value;
+        }
+    });
+
+    // Collect body sections
+    const bodySections = {};
+    typeDef.bodySections.forEach(section => {
+        if (section.type === 'markdown') {
+            const renderedDiv = formContainer.querySelector(`.markdown-rendered[data-section-id="${section.id}"]`);
+            if (renderedDiv) {
+                // Need to get raw markdown? We stored raw in textarea on edit. But after blur we lost raw.
+                // We'll store raw markdown in a data attribute or hidden field.
+                // Simpler: We'll use the currentCard.body as base and update sections by parsing.
+                // We'll just call a function to rebuild body from existing sections and update the changed one.
+            }
+        } else if (section.type === 'checklist') {
+            const checklistDiv = formContainer.querySelector(`div[data-section-id="${section.id}"]`);
+            if (checklistDiv) {
+                const items = [];
+                checklistDiv.querySelectorAll('.checklist-item').forEach(div => {
+                    const checkbox = div.querySelector('input[type="checkbox"]');
+                    const span = div.querySelector('span');
+                    items.push({ checked: checkbox.checked, text: span.textContent });
+                });
+                bodySections[section.id] = serializeChecklist(items);
+            }
+        }
+    });
+
+    // For markdown sections, we need to capture current raw text if in edit mode, otherwise from parsed body.
+    // We'll use currentCard.body parsed sections as base, then replace sections we have in bodySections.
+    const parsedOriginal = parseSections(currentCard.body);
+    // Markdown sections: if we are currently editing, the textarea is present. Otherwise we have the rendered div.
+    typeDef.bodySections.forEach(section => {
+        if (section.type === 'markdown') {
+            const renderedDiv = formContainer.querySelector(`.markdown-rendered[data-section-id="${section.id}"]`);
+            if (renderedDiv) {
+                // If not editing, we don't have raw md; but we can keep original.
+                // If editing, a textarea with dataset sectionId exists.
+                const textarea = formContainer.querySelector(`textarea[data-section-id="${section.id}"]`);
+                if (textarea) {
+                    bodySections[section.id] = textarea.value;
+                } else {
+                    // Use original content from currentCard.body
+                    bodySections[section.id] = parsedOriginal[section.label] || '';
+                }
+            }
+        }
+    });
+
+    // Rebuild body
+    let newBody = '';
+    typeDef.bodySections.forEach(section => {
+        newBody += `## ${section.label}\n${bodySections[section.id] || ''}\n\n`;
+    });
+    newBody += `## Activity Log\n${parsedOriginal['Activity Log'] || ''}\n`;
+
+    // Update meta
+    frontmatter.meta = frontmatter.meta || {};
+    frontmatter.meta.revision = (frontmatter.meta.revision || 0) + 1;
+    frontmatter.meta.updatedAt = new Date().toISOString();
+    delete frontmatter.meta.contentHash;
+
+    const hash = await computeContentHash(frontmatter, newBody);
+    frontmatter.meta.contentHash = hash;
+
+    // Write file
+    const cardType = frontmatter.type === 'project' ? 'project' : 'feature';
+    try {
+        if (cardType === 'project') {
+            const projectsDir = await ensureDirectory(workspaceHandle, 'projects');
+            const fileHandle = await projectsDir.getFileHandle(`${currentCard.id}.md`);
+            await writeFile(fileHandle, serializeCard(frontmatter, newBody));
+            // Update project name if title changed
+            const project = workspaceData.projects.find(p => p.id === frontmatter.projectId);
+            if (project && project.name !== frontmatter.title) {
+                project.name = frontmatter.title;
+                await writeFile(await getFileHandle(workspaceHandle, 'workspace.json', true), JSON.stringify(workspaceData, null, 2));
+            }
+        } else {
+            const projectDir = await ensureDirectory(workspaceHandle, currentProject.id);
+            const featuresDir = await ensureDirectory(projectDir, 'features');
+            const fileHandle = await featuresDir.getFileHandle(`${currentCard.id}.md`);
+            await writeFile(fileHandle, serializeCard(frontmatter, newBody));
+        }
+        // Update currentCard to reflect changes
+        currentCard.frontmatter = frontmatter;
+        currentCard.body = newBody;
+        console.log('Auto-saved card', currentCard.id);
+    } catch (e) {
+        console.error('Auto-save failed:', e);
+        document.getElementById('conflict-warning').classList.remove('hidden');
+    }
+}
+
+// ---------- New Card Creation ----------
 async function createNewCard(formContainer) {
     const title = document.getElementById('new-card-title')?.value.trim();
     if (!title) { alert('Title is required'); return; }
@@ -1184,7 +1346,6 @@ async function createNewCard(formContainer) {
     if (typeId === 'project') {
         projectId = document.getElementById('new-card-projectId')?.value.trim();
         if (!projectId) { alert('Project ID is required'); return; }
-        // Check uniqueness
         if (workspaceData.projects.some(p => p.id === projectId)) {
             alert('Project ID already exists');
             return;
@@ -1197,10 +1358,7 @@ async function createNewCard(formContainer) {
         projectId = currentBoard;
     }
 
-    // Generate card ID
     const cardId = generateCardId(typeId);
-
-    // Build frontmatter
     const frontmatter = {
         id: cardId,
         type: typeId,
@@ -1214,22 +1372,18 @@ async function createNewCard(formContainer) {
 
     if (typeId === 'project') {
         frontmatter.projectId = projectId;
-        // Add default listId? For workspace board, we use workspaceFeatureOrder; card listId is optional.
-        // We'll set listId to 'backlog' for simplicity.
         frontmatter.listId = 'backlog';
     } else {
         frontmatter.projectId = projectId;
         frontmatter.listId = 'backlog';
     }
 
-    // Apply default values for fields
     typeDef.frontmatterFields.forEach(field => {
         if (field.default !== undefined && frontmatter[field.key] === undefined) {
             frontmatter[field.key] = field.default;
         }
     });
 
-    // Build body
     let body = '';
     typeDef.bodySections.forEach(section => {
         body += `## ${section.label}\n\n`;
@@ -1238,31 +1392,26 @@ async function createNewCard(formContainer) {
 
     frontmatter.meta.contentHash = await computeContentHash(frontmatter, body);
 
-    // Write file
     try {
         if (typeId === 'project') {
             const projectsDir = await ensureDirectory(workspaceHandle, 'projects');
             const fileHandle = await projectsDir.getFileHandle(`${cardId}.md`, { create: true });
             await writeFile(fileHandle, serializeCard(frontmatter, body));
-            // Add to workspaceData.projects and order
             workspaceData.projects.push({ id: projectId, name: title });
             if (!workspaceData.workspaceFeatureOrder) workspaceData.workspaceFeatureOrder = {};
             if (!workspaceData.workspaceFeatureOrder['backlog']) workspaceData.workspaceFeatureOrder['backlog'] = [];
             workspaceData.workspaceFeatureOrder['backlog'].push(cardId);
             await writeFile(await getFileHandle(workspaceHandle, 'workspace.json', true), JSON.stringify(workspaceData, null, 2));
-            // Create project directory and project.json
             const projectDir = await ensureDirectory(workspaceHandle, projectId);
             const projectData = { id: projectId, lists: defaultLists(), featureOrder: {} };
             projectData.lists.forEach(list => projectData.featureOrder[list.id] = []);
             await writeFile(await projectDir.getFileHandle('project.json', { create: true }), JSON.stringify(projectData, null, 2));
-            // Create features dir
             await ensureDirectory(projectDir, 'features');
         } else {
             const projectDir = await ensureDirectory(workspaceHandle, projectId);
             const featuresDir = await ensureDirectory(projectDir, 'features');
             const fileHandle = await featuresDir.getFileHandle(`${cardId}.md`, { create: true });
             await writeFile(fileHandle, serializeCard(frontmatter, body));
-            // Add to project order
             const projectData = await loadProjectData(projectId);
             if (!projectData.featureOrder['backlog']) projectData.featureOrder['backlog'] = [];
             projectData.featureOrder['backlog'].push(cardId);
@@ -1274,99 +1423,7 @@ async function createNewCard(formContainer) {
         return;
     }
 
-    document.getElementById('card-modal').classList.add('hidden');
-    await renderBoard();
-}
-
-async function updateExistingCard(formContainer) {
-    if (!currentCard) return;
-    const frontmatter = { ...currentCard.frontmatter };
-    const typeDef = featureTypes[frontmatter.type];
-    const bodySections = {};
-
-    // Frontmatter fields
-    const inputs = formContainer.querySelectorAll('input[data-field-key], select[data-field-key]');
-    inputs.forEach(input => {
-        const key = input.dataset.fieldKey;
-        if (input.type === 'text' && key === 'labels') {
-            // Parse comma-separated labels for multiselect
-            frontmatter[key] = input.value.split(',').map(s => s.trim()).filter(Boolean);
-        } else {
-            frontmatter[key] = input.value;
-        }
-    });
-
-    // Body sections
-    if (typeDef) {
-        typeDef.bodySections.forEach(section => {
-            if (section.type === 'markdown') {
-                const textarea = formContainer.querySelector(`textarea[data-section-id="${section.id}"]`);
-                if (textarea) bodySections[section.id] = textarea.value;
-            } else if (section.type === 'checklist') {
-                const checklistDiv = formContainer.querySelector(`div[data-section-id="${section.id}"]`);
-                if (checklistDiv) {
-                    const items = [];
-                    checklistDiv.querySelectorAll('.checklist-item').forEach(div => {
-                        const checkbox = div.querySelector('input[type="checkbox"]');
-                        const span = div.querySelector('span');
-                        items.push({ checked: checkbox.checked, text: span.textContent });
-                    });
-                    bodySections[section.id] = serializeChecklist(items);
-                }
-            }
-        });
-    }
-
-    // Rebuild body
-    let newBody = '';
-    if (typeDef) {
-        typeDef.bodySections.forEach(section => {
-            newBody += `## ${section.label}\n${bodySections[section.id] || ''}\n\n`;
-        });
-        const originalSections = parseSections(currentCard.body);
-        if (originalSections['Activity Log']) {
-            newBody += `## Activity Log\n${originalSections['Activity Log']}\n`;
-        }
-    } else {
-        const textarea = formContainer.querySelector('textarea[data-section-id="body"]');
-        if (textarea) newBody = textarea.value;
-    }
-
-    // Update meta
-    frontmatter.meta = frontmatter.meta || {};
-    frontmatter.meta.revision = (frontmatter.meta.revision || 0) + 1;
-    frontmatter.meta.updatedAt = new Date().toISOString();
-    delete frontmatter.meta.contentHash;
-
-    const hash = await computeContentHash(frontmatter, newBody);
-    frontmatter.meta.contentHash = hash;
-
-    // Write file
-    const cardType = currentCard.type === 'project' ? 'project' : 'feature';
-    try {
-        if (cardType === 'project') {
-            const projectsDir = await ensureDirectory(workspaceHandle, 'projects');
-            const fileHandle = await projectsDir.getFileHandle(`${currentCard.id}.md`);
-            await writeFile(fileHandle, serializeCard(frontmatter, newBody));
-            // Update project name in workspaceData if title changed
-            const project = workspaceData.projects.find(p => p.id === frontmatter.projectId);
-            if (project && project.name !== frontmatter.title) {
-                project.name = frontmatter.title;
-                await writeFile(await getFileHandle(workspaceHandle, 'workspace.json', true), JSON.stringify(workspaceData, null, 2));
-            }
-        } else {
-            const projectDir = await ensureDirectory(workspaceHandle, currentProject.id);
-            const featuresDir = await ensureDirectory(projectDir, 'features');
-            const fileHandle = await featuresDir.getFileHandle(`${currentCard.id}.md`);
-            await writeFile(fileHandle, serializeCard(frontmatter, newBody));
-        }
-    } catch (e) {
-        console.error(e);
-        alert('Failed to update card: ' + e.message);
-        return;
-    }
-
-    document.getElementById('card-modal').classList.add('hidden');
+    closeModal();
     await renderBoard();
 }
 
@@ -1376,40 +1433,56 @@ function generateCardId(typeId) {
     return `${prefix}-${num}`;
 }
 
+// ---------- Modal Close ----------
+function closeModal() {
+    document.getElementById('card-modal').classList.add('hidden');
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+    }
+    // If there are unsaved changes, they may be saved before close? We'll rely on debounce.
+    // For simplicity, we could trigger a save immediately if currentCard and editingNew false.
+    if (currentCard && !editingNew) {
+        saveExistingCard(); // fire and forget
+    }
+    currentCard = null;
+    editingNew = false;
+}
+
+document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('card-modal').classList.contains('hidden')) {
+        closeModal();
+    }
+});
+
+document.getElementById('card-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('card-modal')) {
+        closeModal();
+    }
+});
+
 // ---------- Event Listeners ----------
-document.getElementById('open-workspace-btn').addEventListener('click', async () => {
-    try {
-        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        await saveWorkspaceHandle(handle);
-        await loadWorkspaceFromHandle(handle);
-    } catch (err) {
-        if (err.name !== 'AbortError') {
-            alert('Failed to open workspace: ' + err.message);
-        }
-    }
-});
-
-document.getElementById('open-workspace-empty-btn').addEventListener('click', async () => {
-    try {
-        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        await saveWorkspaceHandle(handle);
-        await loadWorkspaceFromHandle(handle);
-    } catch (err) {
-        if (err.name !== 'AbortError') {
-            alert('Failed to open workspace: ' + err.message);
-        }
-    }
-});
-
+document.getElementById('open-workspace-btn').addEventListener('click', openWorkspace);
+document.getElementById('open-workspace-empty-btn').addEventListener('click', openWorkspace);
 document.getElementById('new-card-btn').addEventListener('click', () => {
     if (!workspaceHandle) return;
     const cardType = currentBoard === 'workspace' ? 'project' : 'feature';
     openNewCardModal(cardType);
 });
 
-document.getElementById('close-modal-btn').addEventListener('click', () => {
-    document.getElementById('card-modal').classList.add('hidden');
-});
+async function openWorkspace() {
+    try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await saveWorkspaceHandle(handle);
+        await loadWorkspaceFromHandle(handle);
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            alert('Failed to open workspace: ' + err.message);
+        }
+    }
+}
 
 // ---------- Initial Load ----------
 (async () => {
