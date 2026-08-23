@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoloKanban — Local-First Agent-Native Kanban</title>
+  <meta name="description" content="SoloKanban is a local-first, agent-native dual-level Kanban board system running entirely in the browser using the File System Access API.">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-section">
+      <h1 class="logo-text">SoloKanban</h1>
+      <nav id="breadcrumb-nav" class="breadcrumb-nav">
+        <span><strong>Workspace Board</strong></span>
+      </nav>
+    </div>
+
+    <div class="header-actions">
+      <button id="open-folder-btn" class="btn-primary">📁 Open Workspace Folder</button>
+      <button id="open-settings-btn" class="btn-secondary">⚙ Settings</button>
+    </div>
+  </header>
+
+  <div id="first-run-banner-container"></div>
+
+  <main id="kanban-board-container" class="kanban-board-container">
+    <div class="empty-workspace-prompt" style="text-align: center; margin-top: 100px;">
+      <h2>Welcome to SoloKanban</h2>
+      <p style="color: var(--text-secondary); margin: 16px 0;">Select a local workspace folder to load your Kanban board.</p>
+      <button onclick="document.getElementById('open-folder-btn').click()" class="btn-primary" style="padding: 12px 24px; font-size: 1rem;">Choose Folder...</button>
+    </div>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
