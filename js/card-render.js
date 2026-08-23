@@ -54,11 +54,13 @@ export function renderCardFace(card, context = {}) {
     })
     .join('');
 
-  // Priority Flag
+  // Priority Flag (Jira style)
   let priorityHtml = '';
   if (fm.priority) {
-    const prioColor = fm.priority === 'critical' || fm.priority === 'high' ? '#d63031' : fm.priority === 'medium' ? '#fdcb6e' : '#b2bec3';
-    priorityHtml = `<span class="card-priority-flag" title="Priority: ${escapeHtml(fm.priority)}" style="color: ${prioColor};">🚩 ${escapeHtml(fm.priority)}</span>`;
+    const prio = String(fm.priority).toLowerCase();
+    const prioClass = prio === 'critical' ? 'prio-critical' : prio === 'high' ? 'prio-high' : prio === 'medium' ? 'prio-medium' : 'prio-low';
+    const prioIcon = prio === 'critical' ? '🔥' : prio === 'high' ? '⚡' : prio === 'medium' ? '▲' : '▼';
+    priorityHtml = `<span class="card-priority-badge ${prioClass}" title="Priority: ${escapeHtml(fm.priority)}">${prioIcon} ${escapeHtml(fm.priority)}</span>`;
   }
 
   // Due Date Badge & Stale Badge (Visual hierarchy: Overdue red takes precedence over stale yellow)

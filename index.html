@@ -6,30 +6,53 @@
   <title>SoloKanban — Local-First Agent-Native Kanban</title>
   <meta name="description" content="SoloKanban is a local-first, agent-native dual-level Kanban board system running entirely in the browser using the File System Access API.">
   <link rel="stylesheet" href="index.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
   <header class="app-header">
-    <div class="brand-section">
-      <h1 class="logo-text">SoloKanban</h1>
+    <div class="header-left">
+      <div class="brand-section">
+        <div class="brand-logo">⚡</div>
+        <h1 class="logo-text">SoloKanban</h1>
+      </div>
       <nav id="breadcrumb-nav" class="breadcrumb-nav">
-        <span><strong>Workspace Board</strong></span>
+        <span class="nav-pill active">Workspace Board</span>
       </nav>
     </div>
 
-    <div class="header-actions">
-      <button id="create-card-btn" class="btn-primary">＋ Create Card</button>
-      <button id="open-folder-btn" class="btn-secondary">📁 Open Workspace Folder</button>
-      <button id="open-settings-btn" class="btn-secondary">⚙ Settings</button>
+    <div class="header-right">
+      <div class="search-bar-container">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="global-search-input" placeholder="Filter cards (Title, Body, ID)..." class="search-input">
+      </div>
+
+      <div class="filter-controls">
+        <select id="swimlane-select" class="header-select" title="Group board by swimlanes">
+          <option value="">Swimlanes: Off</option>
+          <option value="assignee">By Assignee</option>
+          <option value="priority">By Priority</option>
+          <option value="type">By Type</option>
+        </select>
+      </div>
+
+      <div class="header-actions">
+        <button id="create-card-btn" class="btn-gradient">＋ New Card</button>
+        <button id="open-folder-btn" class="btn-header-secondary">📁 Open Folder</button>
+        <button id="open-settings-btn" class="btn-header-icon" title="Settings">⚙</button>
+      </div>
     </div>
   </header>
 
   <div id="first-run-banner-container"></div>
 
   <main id="kanban-board-container" class="kanban-board-container">
-    <div class="empty-workspace-prompt" style="text-align: center; margin-top: 100px;">
+    <div class="empty-workspace-prompt">
+      <div class="prompt-icon">📁</div>
       <h2>Welcome to SoloKanban</h2>
-      <p style="color: var(--text-secondary); margin: 16px 0;">Select a local workspace folder to load your Kanban board.</p>
-      <button onclick="document.getElementById('open-folder-btn').click()" class="btn-primary" style="padding: 12px 24px; font-size: 1rem;">Choose Folder...</button>
+      <p>Select a local workspace folder to start managing project & feature cards with local-first file system access.</p>
+      <button onclick="document.getElementById('open-folder-btn').click()" class="btn-gradient btn-lg">Choose Local Workspace Folder...</button>
     </div>
   </main>
 

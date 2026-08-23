@@ -153,6 +153,10 @@ export class BoardRenderer {
       }
     }
 
+    if (cardElementsHtml.length === 0) {
+      cardElementsHtml.push(`<div class="empty-column-placeholder btn-add-card-footer" data-list-id="${list.id}">+ Add a card to ${escapeHtml(list.name)}</div>`);
+    }
+
     return `
       <div class="kanban-column" data-list-id="${list.id}">
         <div class="column-header">

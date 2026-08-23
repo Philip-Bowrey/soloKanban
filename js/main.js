@@ -210,6 +210,23 @@ export class SoloKanbanApp {
       });
     }
 
+    const searchInput = document.getElementById('global-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        this.state.filterSearch = searchInput.value;
+        this.refreshBoard();
+      });
+    }
+
+    const swimlaneSelect = document.getElementById('swimlane-select');
+    if (swimlaneSelect) {
+      swimlaneSelect.addEventListener('change', async () => {
+        const val = swimlaneSelect.value || null;
+        await this.preferencesManager.set('board.swimlaneBy', val);
+        this.refreshBoard();
+      });
+    }
+
     const settingsBtn = document.getElementById('open-settings-btn');
     if (settingsBtn) {
       settingsBtn.addEventListener('click', () => {
