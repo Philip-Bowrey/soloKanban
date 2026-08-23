@@ -137,7 +137,8 @@ test('US-CARD-6: title field accepts edits; card ID badge is not editable', asyn
   const idBadge = page.locator('.modal-id-badge');
   await expect(idBadge).toBeVisible();
   // Should be a span (not an input)
-  await expect(idBadge).not.toBeEditable();
+  expect(await idBadge.getAttribute('contenteditable')).not.toBe('true');
+  await expect(page.locator('input.modal-id-badge')).toHaveCount(0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -899,3 +899,29 @@ body {
   opacity: 0.8;
   border: 1px dashed #94a3b8;
 }
+
+.card-progress-ring {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-progress-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.card-progress-ring .ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 3.8;
+}
+
+.card-progress-ring .ring-fill {
+  fill: none;
+  stroke: #0984e3;
+  stroke-width: 3.8;
+  stroke-linecap: round;
+}

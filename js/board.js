@@ -5,6 +5,7 @@
 
 import { renderCardFace } from './card-render.js';
 import { escapeHtml } from './markdown.js';
+import { DEFAULT_WORKSPACE_CONFIG, DEFAULT_PROJECT_CONFIG } from './defaults.js';
 
 export class BoardRenderer {
   constructor(appState) {
@@ -26,26 +27,20 @@ export class BoardRenderer {
     let cardsToRender = [];
 
     if (this.appState.currentView === 'workspace') {
-      config = db.workspaceConfig || {
-        lists: [
-          { id: 'backlog', name: 'Backlog' },
-          { id: 'in-progress', name: 'In Progress' },
-          { id: 'done', name: 'Done', done: true }
-        ],
-        featureOrder: {},
-        layout: { dividers: [] }
+      const wsConfig = db.workspaceConfig || DEFAULT_WORKSPACE_CONFIG;
+      config = {
+        lists: (wsConfig.lists && wsConfig.lists.length > 0) ? wsConfig.lists : DEFAULT_WORKSPACE_CONFIG.lists,
+        featureOrder: wsConfig.featureOrder || {},
+        layout: wsConfig.layout || { dividers: [] }
       };
       cardsToRender = Array.from(db.cards.values()).filter(c => c.type === 'project');
     } else {
       const projId = this.appState.currentProjectId;
-      config = db.projects.get(projId) || {
-        lists: [
-          { id: 'backlog', name: 'Backlog' },
-          { id: 'in-progress', name: 'In Progress' },
-          { id: 'done', name: 'Done', done: true }
-        ],
-        featureOrder: {},
-        layout: { dividers: [] }
+      const projConfig = db.projects.get(projId) || DEFAULT_PROJECT_CONFIG;
+      config = {
+        lists: (projConfig.lists && projConfig.lists.length > 0) ? projConfig.lists : DEFAULT_PROJECT_CONFIG.lists,
+        featureOrder: projConfig.featureOrder || {},
+        layout: projConfig.layout || { dividers: [] }
       };
       cardsToRender = Array.from(db.cards.values()).filter(c => c.projectId === projId && c.type !== 'project');
     }

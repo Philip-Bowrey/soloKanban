@@ -13,7 +13,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL || 'https://philip-bowrey.github.io/soloKanban/';
+const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:8080';
 const isRemote = BASE_URL.startsWith('https://') || (BASE_URL.startsWith('http://') && !BASE_URL.includes('127.0.0.1') && !BASE_URL.includes('localhost'));
 
 export default defineConfig({

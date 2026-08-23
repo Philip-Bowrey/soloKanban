@@ -195,8 +195,18 @@ export class SoloKanbanApp {
 
   bindCardClickListeners() {
     document.querySelectorAll('.kanban-card-wrapper').forEach(cardEl => {
+      let startX = 0;
+      let startY = 0;
+
+      cardEl.addEventListener('mousedown', (e) => {
+        startX = e.clientX;
+        startY = e.clientY;
+      });
+
       cardEl.addEventListener('click', (e) => {
         if (cardEl.classList.contains('dragging')) return;
+        const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+        if (dist >= 2) return; // Small drag movement — ignore click
 
         const cardId = cardEl.dataset.cardId;
         const card = this.db.cards.get(cardId);

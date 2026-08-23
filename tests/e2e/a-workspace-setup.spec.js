@@ -108,7 +108,7 @@ test('US-SETUP-4: non-Chromium user sees stronger warning banner with manual edi
         constructor() { this.kind = 'directory'; this.name = 'root'; this._store = new Map(); }
         async getFileHandle(n, { create = false } = {}) {
           if (!this._store.has(n)) {
-            if (!create) { const e = new DOMException('NotFound', 'NotFoundError'); e.code = 8; throw e; }
+            if (!create) { throw new DOMException('NotFound', 'NotFoundError'); }
             const fh = { kind: 'file', name: n, _content: '', async getFile() { return { text: async () => this._content, name: n }; }, async createWritable() { const s = this; let b = ''; return { async write(c) { b += c; }, async close() { s._content = b; } }; } };
             this._store.set(n, fh); return fh;
           }
@@ -116,7 +116,7 @@ test('US-SETUP-4: non-Chromium user sees stronger warning banner with manual edi
         }
         async getDirectoryHandle(n, { create = false } = {}) {
           if (!this._store.has(n)) {
-            if (!create) { const e = new DOMException('NotFound', 'NotFoundError'); e.code = 8; throw e; }
+            if (!create) { throw new DOMException('NotFound', 'NotFoundError'); }
             const d = new MockDir(); d.name = n; this._store.set(n, d); return d;
           }
           return this._store.get(n);
@@ -128,7 +128,7 @@ test('US-SETUP-4: non-Chromium user sees stronger warning banner with manual edi
     };
   });
 
-  await page.goto('/');
+  await page.goto('');
   await page.click('#open-folder-btn');
   await page.waitForFunction(() => !document.querySelector('.empty-workspace-prompt'), { timeout: 8000 });
 

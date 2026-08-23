@@ -20,11 +20,11 @@ export class CardModal {
     this.isRawMarkdown = false;
   }
 
-  open(card) {
+  async open(card) {
     this.card = JSON.parse(JSON.stringify(card));
     this.baseCard = JSON.parse(JSON.stringify(card)); // Gap #1 fix: snapshot at open time
     this.originalRevision = this.card.frontmatter?.meta?.revision || 1;
-    this.originalContentHash = this.card.frontmatter?.meta?.contentHash || '';
+    this.originalContentHash = await computeContentHash(this.card.frontmatter || {}, this.card.body || '');
     this.isRawMarkdown = false;
 
     this.appState.activeCard = this.card;
@@ -373,9 +373,27 @@ export class CardModal {
       return JSON.stringify(copy);
     };
 
-    // Frontmatter conflicts cannot auto-merge
-    if (filterFm(localCard.frontmatter) !== filterFm(incomingParsed.frontmatter)) {
-      return { success: false };
+    const localFmStr = filterFm(localCard.frontmatter);
+    const incFmStr = filterFm(incomingParsed.frontmatter);
+    const baseFmStr = baseCard ? filterFm(baseCard.frontmatter) : null;
+
+    let mergedFrontmatter = localCard.frontmatter;
+
+    if (localFmStr !== incFmStr) {
+      if (baseFmStr) {
+        if (incFmStr === baseFmStr) {
+          // Incoming didn't touch frontmatter; keep local user frontmatter
+          mergedFrontmatter = localCard.frontmatter;
+        } else if (localFmStr === baseFmStr) {
+          // Local user didn't touch frontmatter; accept incoming frontmatter
+          mergedFrontmatter = incomingParsed.frontmatter;
+        } else {
+          // Both sides made conflicting frontmatter edits -> show merge modal
+          return { success: false };
+        }
+      } else {
+        return { success: false };
+      }
     }
 
     const localSections = parseBodySections(localCard.body);
@@ -435,6 +453,7 @@ export class CardModal {
     }
 
     const mergedCard = JSON.parse(JSON.stringify(localCard));
+    mergedCard.frontmatter = mergedFrontmatter;
     mergedCard.body = bodyParts.join('\n\n');
 
     return { success: true, mergedCard };
