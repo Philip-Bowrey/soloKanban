@@ -60,4 +60,21 @@ describe('Tier 4 — Integration Tests', () => {
       assert.equal(reloaded.length, 0);
     });
   });
+
+  describe('Custom ALL-CAPS Project ID Creation', () => {
+    it('creates project directory and card using custom ALL-CAPS project ID code', async () => {
+      const mockFs = new MockFileSystemAdapter({
+        'workspace.json': JSON.stringify({ id: 'ws', featureOrder: {} })
+      });
+      const db = new SoloDb(mockFs);
+      const manager = new WorkspaceManager(mockFs, db);
+
+      const cardRecord = await manager.createProjectCard('User Authentication', 'backlog', 'AUTH');
+
+      assert.ok(cardRecord.id.includes('AUTH'), 'Card ID should contain custom code');
+      assert.equal(cardRecord.frontmatter.projectId, 'AUTH');
+      assert.ok(await mockFs.readFile('AUTH/project.json'), 'Should create project.json under AUTH directory');
+      assert.ok(await mockFs.existsDirectory('AUTH/features'), 'Should create features directory under AUTH');
+    });
+  });
 });

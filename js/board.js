@@ -197,9 +197,24 @@ export class BoardRenderer {
       wipBadgeHtml = `<span class="wip-limit-badge ${wipClass}">${count}/${limit}</span>`;
     }
 
-    // Column Stats
-    const totalPoints = listCards.reduce((sum, c) => sum + (Number(c.frontmatter?.storyPoints) || 0), 0);
-    const statsHtml = `<div class="column-stats"><span>${listCards.length} cards</span>${totalPoints > 0 ? ` • <span>${totalPoints} pts</span>` : ''}</div>`;
+    // Customizable Column Stats (PRD §9.4)
+    const boardPrefs = this.appState.preferencesManager?.preferences?.board || {};
+    const configuredStats = boardPrefs.columnStats || ['count', 'points'];
+    const statItems = [];
+
+    if (configuredStats.includes('count') || configuredStats.length === 0) {
+      statItems.push(`<span>${listCards.length} cards</span>`);
+    }
+    if (configuredStats.includes('points')) {
+      const totalPoints = listCards.reduce((sum, c) => sum + (Number(c.frontmatter?.storyPoints) || 0), 0);
+      if (totalPoints > 0) statItems.push(`<span>${totalPoints} pts</span>`);
+    }
+    if (configuredStats.includes('priority')) {
+      const highPrioCount = listCards.filter(c => ['high', 'critical'].includes(String(c.frontmatter?.priority).toLowerCase())).length;
+      if (highPrioCount > 0) statItems.push(`<span>⚡ ${highPrioCount} high</span>`);
+    }
+
+    const statsHtml = `<div class="column-stats">${statItems.join(' • ')}</div>`;
 
     // Render Cards & Dividers
     const cardElementsHtml = [];
@@ -212,7 +227,8 @@ export class BoardRenderer {
         fields: this.appState.db.fields,
         featureTypes: this.appState.db.featureTypes,
         preferences: this.appState.preferencesManager?.preferences,
-        activePresence
+        activePresence,
+        searchQuery: this.appState.filterSearch
       });
 
       cardElementsHtml.push(`<div class="kanban-card-wrapper" data-card-id="${card.id}">${cardHtml}</div>`);

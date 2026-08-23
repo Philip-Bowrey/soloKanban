@@ -5,7 +5,7 @@
 
 import { parseCardFile, serializeCardFile, serializeYaml } from './yaml.js';
 import { computeContentHash } from './hash.js';
-import { parseBodySections, appendActivityLog, mergeActivityLogs, renderMarkdown, escapeHtml } from './markdown.js';
+import { parseBodySections, appendActivityLog, mergeActivityLogs, renderMarkdown, escapeHtml, reconstructBody } from './markdown.js';
 import { parseChecklist, calculateProgress } from './checklist.js';
 
 export class CardModal {
@@ -53,7 +53,7 @@ export class CardModal {
 
   renderModalContainer() {
     if (typeof document === 'undefined' || !document.body) return;
-    let existing = document.getElementById('card-modal');
+    const existing = document.getElementById('card-modal');
     if (existing) existing.remove();
 
     const html = this.buildModalHtml();
@@ -82,16 +82,6 @@ export class CardModal {
            </span>
          </div>`
       : '';
-
-    // Quick Actions Bar (Trello-inspired)
-    const quickActionsHtml = `
-      <div class="modal-quick-actions-bar">
-        <button type="button" class="quick-action-btn" id="qa-labels-btn">🏷️ Labels</button>
-        <button type="button" class="quick-action-btn" id="qa-priority-btn">⚡ Priority</button>
-        <button type="button" class="quick-action-btn" id="qa-dates-btn">📅 Due Date</button>
-        <button type="button" class="quick-action-btn" id="qa-assignee-btn">👤 Assignee</button>
-        <button type="button" class="quick-action-btn" id="qa-checklist-btn">☑️ Checklist</button>
-      </div>`;
 
     // Linear Checklist Progress Bar (Trello / Asana style)
     const checklistItems = parseChecklist(this.card.body || '');
@@ -151,6 +141,10 @@ export class CardModal {
     // Extract section descriptions from feature type for heading tooltips (PRD §16.2)
     const sectionDescriptions = {};
     const cardType = (this.appState.db.featureTypes || []).find(t => t.id === this.card.type);
+    const typeSections = cardType?.bodySections || [
+      { id: 'description', label: 'Feature Specification', placeholder: 'Describe the desired capability' }
+    ];
+
     if (cardType?.bodySections) {
       for (const s of cardType.bodySections) {
         if (s.placeholder || s.label) {
@@ -159,10 +153,54 @@ export class CardModal {
       }
     }
 
+    const { sections, activityLog } = parseBodySections(this.card.body || '');
+
+    // Construct modular sections
+    const displayedSections = [];
+    for (const ts of typeSections) {
+      const tsId = ts.id || ts.label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const found = sections.find(s => s.id === tsId || s.title.toLowerCase() === ts.label.toLowerCase());
+      displayedSections.push({
+        id: tsId,
+        title: ts.label,
+        content: found ? found.content : '',
+        placeholder: ts.placeholder || 'Describe the desired capability'
+      });
+    }
+    for (const s of sections) {
+      if (!displayedSections.some(ds => ds.id === s.id || ds.title.toLowerCase() === s.title.toLowerCase())) {
+        displayedSections.push({
+          id: s.id,
+          title: s.title,
+          content: s.content,
+          placeholder: 'Enter content...'
+        });
+      }
+    }
+
+    let modularSectionsHtml = '';
+    for (const sec of displayedSections) {
+      const renderedContent = sec.content ? renderMarkdown(sec.content, sectionDescriptions) : '';
+      const emptyPlaceholder = `<p class="modular-placeholder">${escapeHtml(sec.placeholder || 'Describe the desired capability')}</p>`;
+
+      modularSectionsHtml += `
+        <div class="modular-section-block" data-section-id="${escapeHtml(sec.id)}">
+          <div class="modular-section-header">
+            <h3 class="modular-section-title" title="${escapeHtml(sec.placeholder || sec.title)}">${escapeHtml(sec.title)}</h3>
+          </div>
+          <div class="modular-section-container">
+            <div class="modular-section-rendered rendered-markdown-box" data-section-id="${escapeHtml(sec.id)}" tabindex="0">
+              ${renderedContent || emptyPlaceholder}
+            </div>
+            <textarea class="modular-section-editor hidden" data-section-id="${escapeHtml(sec.id)}" placeholder="${escapeHtml(sec.placeholder || 'Describe the desired capability')}">${escapeHtml(sec.content || '')}</textarea>
+          </div>
+        </div>`;
+    }
+
     // Body Editor (Raw vs Rendered)
     const bodyHtml = this.isRawMarkdown
       ? `<textarea id="modal-body-editor" class="modal-textarea">${escapeHtml(this.card.body || '')}</textarea>`
-      : `${progressBarHtml}<div id="modal-body-rendered" class="rendered-markdown-box">${renderMarkdown(this.card.body || '', sectionDescriptions)}</div>`;
+      : `${progressBarHtml}<div id="modal-body-rendered" class="rendered-markdown-box modular-sections-wrapper">${modularSectionsHtml}</div>`;
 
     return `
       <div id="card-modal" class="modal-overlay">
@@ -175,8 +213,6 @@ export class CardModal {
             </div>
             <button id="modal-close-btn" class="modal-close-btn">&times;</button>
           </div>
-
-          ${quickActionsHtml}
 
           <div class="modal-body-layout">
             <div class="modal-main-column">
@@ -202,9 +238,12 @@ export class CardModal {
                   <input type="text" id="modal-assignee-input" class="form-input" placeholder="No assignee" value="${escapeHtml(fm.assignee || '')}"/>
                 </div>
 
-                <div class="form-group property-row">
+                <div class="form-group property-row date-property-row">
                   <label class="form-label"><span class="prop-icon">📅</span> Due Date</label>
-                  <input type="date" id="modal-duedate-input" class="form-input" value="${escapeHtml(fm.dueDate || '')}"/>
+                  <div class="date-input-group">
+                    <input type="date" id="modal-duedate-input" class="form-input" value="${escapeHtml(fm.dueDate || '')}"/>
+                    <button type="button" id="btn-due-today" class="btn-xs btn-secondary" title="Set due date to today">Today</button>
+                  </div>
                 </div>
 
                 <div class="form-group property-row">
@@ -530,7 +569,7 @@ export class CardModal {
       });
     }
 
-    // Due Date input change
+    // Due Date input change & Today shortcut
     const dueDateInput = modalEl.querySelector('#modal-duedate-input');
     if (dueDateInput) {
       dueDateInput.addEventListener('change', () => {
@@ -538,6 +577,13 @@ export class CardModal {
         this.scheduleAutoSave();
       });
     }
+
+    modalEl.querySelector('#btn-due-today')?.addEventListener('click', () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (dueDateInput) dueDateInput.value = todayStr;
+      this.card.frontmatter.dueDate = todayStr;
+      this.scheduleAutoSave();
+    });
 
     // Story Points input change
     const storyPointsInput = modalEl.querySelector('#modal-storypoints-input');
@@ -549,44 +595,71 @@ export class CardModal {
       });
     }
 
-    // Quick Actions Bar Buttons (Trello style)
-    modalEl.querySelector('#qa-labels-btn')?.addEventListener('click', () => {
-      const select = modalEl.querySelector('#add-label-select');
-      if (select) {
-        select.focus();
-        select.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
+    // Modular section-by-section click-to-edit handling
+    modalEl.querySelectorAll('.modular-section-block').forEach(block => {
+      const secId = block.dataset.sectionId;
+      const renderedEl = block.querySelector('.modular-section-rendered');
+      const editorEl = block.querySelector('.modular-section-editor');
 
-    modalEl.querySelector('#qa-priority-btn')?.addEventListener('click', () => {
-      const select = modalEl.querySelector('#modal-priority-select');
-      if (select) {
-        select.focus();
-        select.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
+      if (renderedEl && editorEl) {
+        renderedEl.addEventListener('click', (e) => {
+          // Do not enter raw textarea mode if user clicked a checkbox or the add-item input
+          if (e.target.closest('.task-checkbox') || e.target.closest('.checklist-add-row') || e.target.closest('.checklist-new-input')) {
+            return;
+          }
 
-    modalEl.querySelector('#qa-dates-btn')?.addEventListener('click', () => {
-      const dateInput = modalEl.querySelector('#modal-duedate-input');
-      if (dateInput) {
-        dateInput.focus();
-        dateInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
+          renderedEl.classList.add('hidden');
+          editorEl.classList.remove('hidden');
+          editorEl.focus();
+          editorEl.style.height = 'auto';
+          editorEl.style.height = `${Math.max(90, editorEl.scrollHeight)}px`;
+        });
 
-    modalEl.querySelector('#qa-assignee-btn')?.addEventListener('click', () => {
-      const assigneeIn = modalEl.querySelector('#modal-assignee-input');
-      if (assigneeIn) {
-        assigneeIn.focus();
-        assigneeIn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
+        const finishEditing = () => {
+          if (editorEl.classList.contains('hidden')) return;
+          const newContent = editorEl.value;
 
-    modalEl.querySelector('#qa-checklist-btn')?.addEventListener('click', () => {
-      const checkInput = modalEl.querySelector('.checklist-new-input');
-      if (checkInput) {
-        checkInput.focus();
-        checkInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          const parsed = parseBodySections(this.card.body || '');
+          const cardType = (this.appState.db.featureTypes || []).find(t => t.id === this.card.type);
+          const typeSections = cardType?.bodySections || [
+            { id: 'description', label: 'Feature Specification', placeholder: 'Describe the desired capability' }
+          ];
+
+          let found = parsed.sections.find(s => s.id === secId || s.title.toLowerCase() === secId.toLowerCase());
+          if (found) {
+            found.content = newContent;
+          } else {
+            const typeDef = typeSections.find(ts => (ts.id || ts.label.toLowerCase()) === secId.toLowerCase());
+            parsed.sections.push({
+              id: secId,
+              title: typeDef ? typeDef.label : (secId.charAt(0).toUpperCase() + secId.slice(1)),
+              content: newContent
+            });
+          }
+
+          this.card.body = reconstructBody(parsed.sections, parsed.activityLog);
+          this.scheduleAutoSave();
+
+          const placeholder = editorEl.placeholder || 'Describe the desired capability';
+          renderedEl.innerHTML = newContent.trim()
+            ? renderMarkdown(newContent)
+            : `<p class="modular-placeholder">${escapeHtml(placeholder)}</p>`;
+
+          editorEl.classList.add('hidden');
+          renderedEl.classList.remove('hidden');
+          this.updateProgressBarInPlace();
+        };
+
+        editorEl.addEventListener('blur', finishEditing);
+        editorEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            finishEditing();
+          }
+        });
+        editorEl.addEventListener('input', () => {
+          editorEl.style.height = 'auto';
+          editorEl.style.height = `${Math.max(90, editorEl.scrollHeight)}px`;
+        });
       }
     });
 

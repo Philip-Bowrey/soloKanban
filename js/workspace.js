@@ -250,18 +250,38 @@ export class WorkspaceManager {
 
   /**
    * Creates a new project card and initializes its project board directory.
+   * Supports custom ALL-CAPS project IDs (e.g., AUTH, BILLING).
    */
-  async createProjectCard(title = 'New Project', listId = 'backlog') {
-    let maxNum = 0;
-    for (const cardId of this.db.cards.keys()) {
-      if (cardId.startsWith('PROJ-')) {
-        const num = parseInt(cardId.replace('PROJ-', ''), 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
+  async createProjectCard(title = 'New Project', listId = 'backlog', customProjId = '') {
+    let projCode, cardId;
+
+    if (customProjId && customProjId.trim()) {
+      const cleanId = customProjId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      projCode = cleanId;
+      cardId = cleanId.startsWith('PROJ-') ? cleanId : (cleanId.startsWith('PROJ_') ? cleanId.replace('_', '-') : `PROJ-${cleanId}`);
+      // Ensure unique cardId and projCode
+      let counter = 1;
+      let finalCardId = cardId;
+      let finalProjCode = projCode;
+      while (this.db.cards.has(finalCardId) || this.db.projects.has(finalProjCode)) {
+        finalCardId = `${cardId}-${counter}`;
+        finalProjCode = `${projCode}_${counter}`;
+        counter++;
       }
+      cardId = finalCardId;
+      projCode = finalProjCode;
+    } else {
+      let maxNum = 0;
+      for (const cId of this.db.cards.keys()) {
+        if (cId.startsWith('PROJ-')) {
+          const num = parseInt(cId.replace('PROJ-', ''), 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      }
+      const nextNumStr = String(maxNum + 1).padStart(4, '0');
+      projCode = `PROJ_${nextNumStr}`;
+      cardId = `PROJ-${nextNumStr}`;
     }
-    const nextNumStr = String(maxNum + 1).padStart(4, '0');
-    const projCode = `PROJ_${nextNumStr}`;
-    const cardId = `PROJ-${nextNumStr}`;
 
     const frontmatter = {
       title,

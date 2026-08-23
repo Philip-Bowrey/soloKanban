@@ -206,7 +206,13 @@ export class SoloKanbanApp {
     if (this.state.currentView === 'workspace') {
       const title = prompt('Enter Project Name:', 'New Project');
       if (title === null) return;
-      newCardRecord = await this.workspaceManager.createProjectCard(title || 'New Project', listId);
+
+      const suggestedCode = (title || 'PROJ').trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 12);
+      const projIdInput = prompt('Enter Project ID Code (ALL-CAPS, e.g. AUTH, BILLING):', suggestedCode);
+      if (projIdInput === null) return;
+
+      const customProjId = (projIdInput || suggestedCode).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      newCardRecord = await this.workspaceManager.createProjectCard(title || 'New Project', listId, customProjId);
     } else {
       const projId = this.state.currentProjectId;
       const title = prompt('Enter Feature Card Title:', 'New Feature');

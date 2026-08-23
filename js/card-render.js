@@ -17,6 +17,13 @@ import { escapeHtml } from './markdown.js';
  * @param {Array} context.activePresence 
  * @returns {string} HTML string
  */
+/**
+ * Render complete HTML string for a card face with strict 3-row hierarchy:
+ * Row 1: Card Title
+ * Row 2: Feature Type
+ * Row 3: Labels + Feature ID
+ * Footer: Quick complete, priority, due date, progress, points, attachments, agent
+ */
 export function renderCardFace(card, context = {}) {
   const fm = card.frontmatter || {};
   const labelsMap = new Map((context.labels || []).map(l => [l.id, l]));
@@ -24,6 +31,7 @@ export function renderCardFace(card, context = {}) {
   const typesMap = new Map((context.featureTypes || []).map(t => [t.id, t]));
   const cardPrefs = context.preferences?.card || {};
   const activePresence = context.activePresence || [];
+  const searchQuery = context.searchQuery || context.filterSearch || '';
 
   const cardType = typesMap.get(card.type) || { name: card.type || 'Feature', color: '#0984e3' };
 
@@ -63,10 +71,11 @@ export function renderCardFace(card, context = {}) {
     priorityHtml = `<span class="card-priority-badge ${prioClass}" title="Priority: ${escapeHtml(fm.priority)}">${prioIcon} ${escapeHtml(fm.priority)}</span>`;
   }
 
-  // Due Date Badge & Stale Badge (Visual hierarchy: Overdue red takes precedence over stale yellow)
+  // Due Date Badge & Stale Badge (Overdue red takes precedence over stale yellow; includes ⏳ if also stale)
   let dateBadgeHtml = '';
   if (dateStatus.isOverdue) {
-    dateBadgeHtml = `<span class="card-date-badge overdue" title="Overdue">${escapeHtml(dateStatus.label)}</span>`;
+    const staleSuffix = (dateStatus.isStale && cardPrefs.staleAfterDays) ? ' <span class="stale-clock-icon" title="Also stale">⏳</span>' : '';
+    dateBadgeHtml = `<span class="card-date-badge overdue" title="Overdue">${escapeHtml(dateStatus.label)}${staleSuffix}</span>`;
   } else if (dateStatus.isDueSoon) {
     dateBadgeHtml = `<span class="card-date-badge due-soon" title="Due soon">${escapeHtml(dateStatus.label)}</span>`;
   } else if (dateStatus.isStale && cardPrefs.staleAfterDays) {
@@ -144,34 +153,57 @@ export function renderCardFace(card, context = {}) {
   const hasDescription = bodyWithoutHeaders.length > 0;
   const descBadgeHtml = hasDescription ? `<span class="card-summary-icon" title="Has description">≡</span>` : '';
 
-  // Attachments badge
-  const attachmentCount = Array.isArray(fm.attachments) ? fm.attachments.length : 0;
-  const attachBadgeHtml = attachmentCount > 0 ? `<span class="card-summary-icon" title="${attachmentCount} attachment(s)">📎 ${attachmentCount}</span>` : '';
+  // Attachments badge & type thumbnails (PRD §10.2)
+  let attachBadgeHtml = '';
+  if (Array.isArray(fm.attachments) && fm.attachments.length > 0) {
+    const attachIcons = fm.attachments.slice(0, 3).map(att => {
+      const attStr = String(att).toLowerCase();
+      if (attStr.endsWith('.pdf')) return '📄 PDF';
+      if (attStr.match(/\.(png|jpg|jpeg|gif|webp|svg)$/)) return '🖼️ IMG';
+      if (attStr.startsWith('http://') || attStr.startsWith('https://')) return '🔗 Link';
+      return '📎 File';
+    });
+    const extraCount = fm.attachments.length > 3 ? ` +${fm.attachments.length - 3}` : '';
+    attachBadgeHtml = `<span class="card-summary-icon card-attachments-badge" title="${fm.attachments.length} attachment(s): ${escapeHtml(fm.attachments.join(', '))}">📎 ${fm.attachments.length} (${attachIcons.join(' ')}${extraCount})</span>`;
+  }
 
   // Quick complete circle (Asana-style)
   const isDone = card.frontmatter?.listId === 'done';
   const checkCircleHtml = `<button class="card-quick-complete-btn ${isDone ? 'is-done' : ''}" data-card-id="${card.id}" title="${isDone ? 'Move back to Backlog' : 'Mark as Done'}">${isDone ? '✓' : '○'}</button>`;
 
+  // Title formatting with search match highlighting
+  const rawTitle = fm.title || card.id;
+  let formattedTitle = escapeHtml(rawTitle);
+  if (searchQuery && searchQuery.trim()) {
+    const qEsc = escapeHtml(searchQuery.trim());
+    const regex = new RegExp(`(${qEsc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    formattedTitle = formattedTitle.replace(regex, '<mark class="search-highlight">$1</mark>');
+  }
+
   return `
     <div class="card-face ${isDone ? 'card-face-done' : ''}" data-card-id="${card.id}">
       ${coverHtml}
-      <div class="card-header-bar">
-        <div class="card-header-left">
-          ${checkCircleHtml}
-          <span class="card-type-tag" style="background-color: ${cardType.color};">${escapeHtml(cardType.name)}</span>
-          <span class="card-id-tag">${escapeHtml(card.id)}</span>
-        </div>
-        ${agentBadgeHtml}
+      
+      <!-- Row 1: Card Title -->
+      <div class="card-title">${formattedTitle}</div>
+
+      <!-- Row 2: Feature Type -->
+      <div class="card-row-type">
+        <span class="card-type-tag" style="background-color: ${cardType.color};">${escapeHtml(cardType.name)}</span>
       </div>
 
-      ${labelChipsHtml ? `<div class="card-labels-container">${labelChipsHtml}</div>` : ''}
-
-      <div class="card-title">${escapeHtml(fm.title || card.id)}</div>
+      <!-- Row 3: Labels and Feature ID -->
+      <div class="card-row-meta">
+        <span class="card-id-tag">${escapeHtml(card.id)}</span>
+        ${labelChipsHtml ? `<div class="card-labels-container">${labelChipsHtml}</div>` : ''}
+      </div>
 
       ${customFieldChips.length > 0 ? `<div class="card-custom-fields-container">${customFieldChips.join('')}</div>` : ''}
 
+      <!-- Footer Row: Quick Complete, Badges, Stats, Presence, Avatars -->
       <div class="card-footer-bar">
         <div class="card-footer-left">
+          ${checkCircleHtml}
           ${priorityHtml}
           ${dateBadgeHtml}
           ${storyPointsHtml}
@@ -180,6 +212,7 @@ export function renderCardFace(card, context = {}) {
           ${attachBadgeHtml}
         </div>
         <div class="card-footer-right">
+          ${agentBadgeHtml}
           ${progressRingHtml}
           ${avatarHtml}
         </div>

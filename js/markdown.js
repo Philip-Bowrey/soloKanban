@@ -246,3 +246,27 @@ export function mergeActivityLogs(logA = '', logB = '') {
   return uniqueLines.join('\n');
 }
 
+/**
+ * Reconstructs complete card body from sections array and activity log.
+ * @param {Array<{title: string, content: string}>} sections 
+ * @param {string} [activityLog] 
+ * @returns {string}
+ */
+export function reconstructBody(sections, activityLog = '') {
+  const parts = [];
+  for (const s of sections) {
+    if (s.title) {
+      parts.push(`## ${s.title}`);
+    }
+    if (s.content !== undefined && s.content !== null) {
+      parts.push(s.content);
+    }
+    parts.push('');
+  }
+  if (activityLog && activityLog.trim()) {
+    parts.push('## Activity Log');
+    parts.push(activityLog.trim());
+  }
+  return parts.join('\n').trim();
+}
+
